@@ -33,10 +33,21 @@ export function Arena({ control }: { control: MutableRefObject<Control> }) {
       bubbles: Phaser.GameObjects.Container[] = [];
       damageLabels = new Map<number, { until: number; amount: number }>();
       create() {
+        // Supersampled mage-only panel: smooth text/edges without filtering pixel actors.
+        const speechTexture = this.textures.createCanvas("mage-speech-hidpi", 132 * 3 + 12, 60 * 3)!;
+        const ctx = speechTexture.getContext();
+        ctx.scale(3, 3); ctx.translate(68, 30);
+        ctx.fillStyle = "#fffdf0"; ctx.strokeStyle = "#182235"; ctx.lineWidth = 2;
+        ctx.beginPath(); ctx.moveTo(-7, 18); ctx.lineTo(0, 29); ctx.lineTo(7, 18);
+        ctx.closePath(); ctx.fill(); ctx.stroke();
+        ctx.beginPath(); ctx.roundRect(-66, -20, 132, 40, 10); ctx.fill(); ctx.stroke();
+        ctx.font = "bold 20px sans-serif"; ctx.textAlign = "center"; ctx.textBaseline = "middle";
+        ctx.fillStyle = "#182235"; ctx.fillText("야심!만만", 0, 0);
+        speechTexture.refresh(); speechTexture.setFilter(Phaser.Textures.FilterMode.LINEAR);
         for(let i=0;i<6;i++) {
           const panel=this.add.graphics();
           const words=this.add.text(0,0,"야심!만만",{fontFamily:"sans-serif",fontSize:"20px",fontStyle:"bold",color:"#182235"}).setOrigin(0.5);
-          this.bubbles.push(this.add.container(0,0,[panel,words]).setDepth(2000+i).setVisible(false));
+          this.bubbles.push(this.add.container(0,0,[panel,words,this.add.image(0,0,"mage-speech-hidpi").setDisplaySize(136,60).setVisible(false)]).setDepth(2000+i).setVisible(false));
         }
         this.effects = this.add.graphics().setDepth(1000);
         this.ink = this.add.graphics();
@@ -138,7 +149,7 @@ export function Arena({ control }: { control: MutableRefObject<Control> }) {
         for(const u of s.units) {
           const phrase=u.cast?"야심!만만":u.lock?.phase==="lock"?"자신있게 맞아줄게":u.lock?.phase==="prone"?"내가 잘못했어 ㅠㅠ":"";
           if(s.outcome || u.hp<=0 || !phrase || speech.length>=6) continue;
-          const scale=u.cast?1/3:1;
+          const scale=u.cast?2/3:1;
           const half=u.cast?66:102;
           const visualHalf=half*scale;
           const x=Math.max(visualHalf+4,Math.min(380-visualHalf,u.x/Q));
@@ -147,8 +158,9 @@ export function Arena({ control }: { control: MutableRefObject<Control> }) {
           const y=candidates.map(v=>Math.max(26,Math.min(486,v))).find(v=>speech.every(b=>Math.abs(b.x-x)>=b.width/2+visualHalf+6 || Math.abs(b.y-v)>=b.height/2+20*scale+6));
           if(y===undefined) continue;
           const bubble=this.bubbles[speech.length]; bubble.setPosition(x,y).setScale(scale).setVisible(true);
-          (bubble.list[1] as Phaser.GameObjects.Text).setText(phrase).setFontSize(u.cast?20:18);
-          const g=bubble.list[0] as Phaser.GameObjects.Graphics;
+          (bubble.list[1] as Phaser.GameObjects.Text).setText(phrase).setFontSize(u.cast?20:18).setVisible(!u.cast);
+          (bubble.list[2] as Phaser.GameObjects.Image).setVisible(!!u.cast);
+          const g=bubble.list[0] as Phaser.GameObjects.Graphics; g.setVisible(!u.cast);
           const tipX=Math.max(-57,Math.min(57,(u.x/Q-x)/scale));
           const bottom=y<u.y/Q; const edge=bottom?20:-20; const tip=bottom?29:-29;
           g.clear().fillStyle(0x111b2b,0.25).fillRoundedRect(-half+2,-17,half*2,40,11);
