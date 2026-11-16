@@ -2,6 +2,7 @@ import { useEffect, useRef, type MutableRefObject } from "react";
 import Phaser from "phaser";
 import { actorScale, cries, sobFrame } from "./presentation";
 import { characters } from "./characters";
+import { seokhoPose } from "./seokhoPose";
 import { Q, KICK, MAGE, LOCK, step, type Battle, type Event } from "./sim";
 export type Control = {
   state: Battle;
@@ -272,6 +273,7 @@ export function Arena({ control }: { control: MutableRefObject<Control> }) {
           const fist=a.list[4] as Phaser.GameObjects.Graphics;fist.setVisible(false);
           const stance=a.list[5] as Phaser.GameObjects.Graphics;stance.clear().setVisible(false);
           sprite.setCrop();
+          sprite.setVisible(true);
           const spinTick = s.tick + (c.paused || c.hidden ? 0 : this.debt / (1000 / 30));
           const winding = u.hp > 0 && !!u.kick;
           const recovering = u.hp > 0 && u.kickPoseUntil > 0 && s.tick <= u.kickPoseUntil;
@@ -289,6 +291,7 @@ export function Arena({ control }: { control: MutableRefObject<Control> }) {
           }
           sprite.setScale(actorScale(u.character));
           let lockPhase="none",kneeSlap=false;
+          let bodyPose="standing", poseRight: {x:number;y:number}|null=null, poseLeft: {x:number;y:number}|null=null, poseExtension=0;
           if(u.hp>0 && u.lock && !s.outcome) {
             lockPhase=u.lock.phase;
             const target=s.units[u.lock.target];
@@ -315,17 +318,21 @@ export function Arena({ control }: { control: MutableRefObject<Control> }) {
                 stance.fillStyle(0xffd2ad);stance.fillRect(handX-3,handY-2,6,5);
                 if(slap){stance.lineStyle(1,0xffe296);stance.strokeCircle(handX,handY,7);}
               }
-            } else if(lockPhase==="prone") {
-              sprite.setAngle(90).setY(2);
-            } else if(lockPhase==="left"||lockPhase==="right") {
-              const remaining=u.lock.due-s.tick;
-              // Actor-relative right is clockwise perpendicular to facing (screen y points down).
-              const side=lockPhase==="right"?1:-1, radians=aim*Math.PI/180;
-              sprite.setAngle(aim-90+(this.reduced.matches?0:side*12));
-              fist.setVisible(true).setScale(remaining<=3?1:0.6)
-                .setPosition(-Math.sin(radians)*side*6,-8+Math.cos(radians)*side*6)
-                .setAngle(aim).setAlpha(remaining<=3?1:0.7);
-            } else sprite.setAngle(this.reduced.matches?0:12);
+            } else if(["prone","dash","left","right"].includes(lockPhase)) {
+              const progress=lockPhase==="right"||lockPhase==="left" ? Math.max(0,Math.min(1,1-(u.lock.due-spinTick)/LOCK.gap)) : 0;
+              const pose=seokhoPose(lockPhase,this.reduced.matches && (lockPhase==="right"||lockPhase==="left")?0.5:progress);
+              bodyPose=pose.pose;poseRight=pose.right;poseLeft=pose.left;poseExtension=pose.extension;
+              sprite.setVisible(false);
+              stance.setVisible(true);
+              const radians=aim*Math.PI/180, scale=actorScale(u.character);
+              const point=(x:number,y:number)=>({x:(x*Math.cos(radians)-y*Math.sin(radians))*scale,y:-8+(x*Math.sin(radians)+y*Math.cos(radians))*scale});
+              for(const shape of pose.shapes) {
+                const p=point(shape.x,shape.y);
+                if(shape.kind==="line") {const q=point(shape.x2!,shape.y2!);stance.lineStyle(shape.thickness!*scale,shape.color);stance.lineBetween(p.x,p.y,q.x,q.y);}
+                else if(shape.kind==="circle") {stance.fillStyle(shape.color);stance.fillCircle(p.x,p.y,shape.r!*scale);}
+                else {const corners=[[shape.x,shape.y],[shape.x+shape.w!,shape.y],[shape.x+shape.w!,shape.y+shape.h!],[shape.x,shape.y+shape.h!]].map(([x,y])=>point(x,y));stance.fillStyle(shape.color);stance.fillPoints(corners,true);}
+              }
+            }
           }
           const crying = cries(s.outcome, u.team, u.hp);
           const emotion = sobFrame(this.emotionClock, u.id, this.reduced.matches);
@@ -342,7 +349,7 @@ export function Arena({ control }: { control: MutableRefObject<Control> }) {
             }
           }
           rendered.push({ id:u.id, team:u.team, character:u.character, textureKey:sprite.texture.key, cast:!!u.cast, fleeing:u.fleeing, hitStop, hp:u.hp, crying, scale:sprite.scaleX,
-            y:sprite.y, angle:sprite.angle, kickPhase, lockPhase, kneeSlap, stanceVisible:stance.visible, stanceWidth:stance.visible?48:0, fistVisible:fist.visible, fistX:fist.x, fistY:fist.y, fistAngle:fist.angle, scaleY:sprite.scaleY, legVisible:leg.visible, legAngle:leg.angle, x:a.x, worldY:a.y, recoilLeft:u.recoilLeft, drop:crying ? emotion.drop : null, visible:a.visible });
+            y:sprite.y, angle:sprite.angle, kickPhase, lockPhase, bodyPose, poseRight, poseLeft, poseExtension, kneeSlap, stanceVisible:stance.visible, stanceWidth:stance.visible?48:0, fistVisible:fist.visible, fistX:fist.x, fistY:fist.y, fistAngle:fist.angle, scaleY:sprite.scaleY, legVisible:leg.visible, legAngle:leg.angle, x:a.x, worldY:a.y, recoilLeft:u.recoilLeft, drop:crying ? emotion.drop : null, visible:a.visible });
           const dmg = this.damageLabels.get(u.id);
           text.setText(
             crying ? "훌쩍…" : u.cast ? "" : dmg && dmg.until >= s.tick

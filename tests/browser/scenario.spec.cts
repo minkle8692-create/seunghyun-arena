@@ -1,6 +1,6 @@
 import {test,expect} from '@playwright/test';
 import {mkdirSync,writeFileSync} from 'node:fs';
-const dir=`evidence/scenario/${process.env.LIVE?'live':'local'}`;
+const dir=process.env.SCENARIO_EVIDENCE||`evidence/scenario/${process.env.LIVE?'live':'local'}`;
 test.beforeAll(()=>mkdirSync(dir,{recursive:true}));
 for(const mobile of [false,true])test(`scenario complete actual battle, same-engine result, controls and normal preservation ${mobile?'mobile reduced':'desktop'}`,async({page})=>{
  const tag=mobile?'mobile':'desktop';const errors:string[]=[];page.on('pageerror',e=>errors.push(e.message));
@@ -46,6 +46,9 @@ for(const mobile of [false,true])test(`scenario complete actual battle, same-eng
  await expect(page.getByTestId('scenario-stage')).toHaveAttribute('data-chapter','ending',{timeout:100000});
  const actual=await page.evaluate(()=>{clearInterval((window as any).capture); const d=(window as any).arenaDiagnostics,s=d.snapshot(),b=d.createBattle(s.config,s.seed);while(!b.outcome)d.step(b);return{summary:d.summarize(s),direct:d.summarize(b),records:(window as any).records};});
  expect(actual.summary).toEqual(actual.direct);
+ const ended=JSON.parse(await page.locator('.arena').getAttribute('data-render')||'[]');
+ expect(ended.every((a:any)=>!a.stanceVisible)).toBe(true);
+ expect(ended.filter((a:any)=>a.hp===0).every((a:any)=>a.bodyPose==='standing')).toBe(true);
  const kinds=actual.records.flatMap((r:any)=>r.events.map((e:any)=>e.kind));
  for(const k of ['kick','lock_start'])expect(kinds).toContain(k);
  await page.screenshot({path:`${dir}/${tag}-ending.png`,fullPage:true});
