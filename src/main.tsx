@@ -3,7 +3,7 @@ import { createRoot } from "react-dom/client";
 import { Arena, type Control } from "./Arena";
 import {
   DEFAULT, NAMES, STAT_MULTIPLIERS, characterOf, MAGE_STATS, type Character,
-  effectiveStats,
+  effectiveStats, maximumHp,
   VERSION,
   createBattle,
   summarize,
@@ -374,6 +374,7 @@ function App() {
                 <p className="hint">캐릭터 변경 즉시 경기장에 반영 · 준비 상태로 초기화 · 기본 스탯 복원, 인원 유지</p>
                 <p data-testid={`effective-${t}`}>
                   {`${NAMES[characterOf(draft,t)]} ×${STAT_MULTIPLIERS[characterOf(draft,t)]}`} · 실제 적용 스탯<br />
+                  {characterOf(draft,t) === "seokho" && <>최대 HP ×2 · {maximumHp("seokho", effectiveStats("seokho", draft[t].stats)[0]) / 100} HP (최종 HP 보정)<br /></>}
                   {labels.map((label, i) => `${label} ${effectiveStats(characterOf(draft,t), draft[t].stats)[i]}`).join(" / ")}
                 </p>
                 <label className="count">
@@ -431,7 +432,7 @@ function App() {
               <b>
                 {draft.A.count} vs {draft.B.count}
               </b>{" "}
-              · HP {55 + 9 * effectiveStats(characterOf(draft,"A"), draft.A.stats)[0]} / {55 + 9 * effectiveStats(characterOf(draft,"B"), draft.B.stats)[0]}
+              · HP {maximumHp(characterOf(draft,"A"), effectiveStats(characterOf(draft,"A"), draft.A.stats)[0]) / 100} / {maximumHp(characterOf(draft,"B"), effectiveStats(characterOf(draft,"B"), draft.B.stats)[0]) / 100}
             </div>
             <button
               className="primary wide"
@@ -590,7 +591,7 @@ function App() {
         <section className="panel" data-testid="seokho-rules">
           <b>25세 석호 · 록온 · 모든 기본 스탯 ×2.5</b>
           <p>기본 7 / 7 / 9 / 8 / 6 / 3 → 실제 17.5 / 17.5 / 22.5 / 20 / 15 / 7.5.
-          35세의 실제 스탯 절반이며 소수값을 보존합니다. 팀과 무관하게 적용, 35세의 회전킥·공속 보정은 없습니다.</p>
+          35세의 실제 스탯 절반이며 소수값을 보존합니다. 석호만 최대 HP = (55 + 9×실제 체력) ×2: 기본 212.5 → 425 HP. 체력 스탯을 다시 곱하지 않으며, 다른 능력치는 그대로입니다. 팀과 무관하게 적용, 35세의 회전킥·공속 보정은 없습니다.</p>
           <p>120px 이내 적 1명 록온 → 1초 준비하며 무릎을 두 번 치고 “자신있게 맞아줄게” → 최대 1초, 120px/s 돌진.
           몸통·벽을 통과하지 않습니다. 실제 거리 22px 안에서 본인 기준 오른손 준비 0.2초 후 타격, 0.3초 뒤 왼손 타격.
           명중률은 기술 차이 5~95%, 몸통 가림·거리 이탈 시 실패합니다. 첫 오른손 타격이 명중하면 확정 치명 1.5배, 두 번째 왼손은 0.5%(오른손이 빗나가도 치명 보너스는 이전되지 않음). 평타는 0.5% 그대로입니다.</p>

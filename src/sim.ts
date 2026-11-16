@@ -1,6 +1,6 @@
 // Authority for all combat. Integer centi-HP and 1/256-pixel coordinates.
 // Exact half-stat inputs may regenerate half-cent energy (binary-exact .5), never truncated.
-export const VERSION = "arena-2.1.2",
+export const VERSION = "arena-2.2.0",
   Q = 256,
   W = 384 * Q,
   H = 512 * Q,
@@ -40,6 +40,9 @@ export const DEFAULT: Config = {
 };
 export type Team = "A" | "B";
 export const STAT_MULTIPLIERS = { youth: 1, adult: 5, mage: 1, seokho: 2.5 } as const;
+export const HP_MULTIPLIERS = { youth: 1, adult: 1, mage: 1, seokho: 2 } as const;
+// Final HP modifier: apply once AFTER the unchanged effective-stat HP formula.
+export const maximumHp = (character: Character, effectiveHealth: number) => (55 + 9 * effectiveHealth) * 100 * HP_MULTIPLIERS[character];
 // Config and persistence always contain BASE stats. Apply exactly once at spawn.
 export function effectiveStats(team: Team | Character, base: Stats): Stats {
   return base.map(n => n * STAT_MULTIPLIERS[identity(team)]) as Stats;
@@ -230,8 +233,8 @@ export function createBattle(input: Config, seed: number): Battle {
           (team === "A"
             ? 40 + Math.floor(i / cols) * 20
             : 472 - Math.floor(i / cols) * 20) * Q,
-        hp: (55 + 9 * stats[0]) * 100,
-        maxHp: (55 + 9 * stats[0]) * 100,
+        hp: maximumHp(characterOf(config,team), stats[0]),
+        maxHp: maximumHp(characterOf(config,team), stats[0]),
         energy: (45 + 7 * stats[1]) * 100,
         maxEnergy: (45 + 7 * stats[1]) * 100,
         rng: mix(seed ^ mix(id)),
@@ -795,8 +798,9 @@ export function summarize(s: Battle) {
   return {
     simVersion: VERSION,
     configSchemaVersion: 2,
-    resultSchemaVersion: 5,
+    resultSchemaVersion: 6,
     combatModifiers: { ...COMBAT_MODIFIERS },
+    hpMultipliers: { A: HP_MULTIPLIERS[characterOf(s.config,"A")], B: HP_MULTIPLIERS[characterOf(s.config,"B")] },
     statMultipliers: { A: STAT_MULTIPLIERS[characterOf(s.config,"A")], B: STAT_MULTIPLIERS[characterOf(s.config,"B")] },
     effectiveStats: { A: effectiveStats(characterOf(s.config,"A"), s.config.A.stats), B: effectiveStats(characterOf(s.config,"B"), s.config.B.stats) },
     rngVersion: "lcg32-reject-v1",
