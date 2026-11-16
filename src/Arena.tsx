@@ -30,8 +30,14 @@ export function Arena({ control }: { control: MutableRefObject<Control> }) {
       impacts = new Map<number, {until:number; freeze:number; x:number; y:number}>();
       sparks: {x:number;y:number;born:number;angle:number}[] = [];
       shakeUntil = 0;
+      bubbles: Phaser.GameObjects.Container[] = [];
       damageLabels = new Map<number, { until: number; amount: number }>();
       create() {
+        for(let i=0;i<6;i++) {
+          const panel=this.add.graphics();
+          const words=this.add.text(0,0,"야심!만만",{fontFamily:"sans-serif",fontSize:"20px",fontStyle:"bold",color:"#182235"}).setOrigin(0.5);
+          this.bubbles.push(this.add.container(0,0,[panel,words]).setDepth(2000+i).setVisible(false));
+        }
         this.effects = this.add.graphics().setDepth(1000);
         this.ink = this.add.graphics();
         this.ink.fillStyle(0x24354a);
@@ -124,6 +130,28 @@ export function Arena({ control }: { control: MutableRefObject<Control> }) {
           this.effects.lineBetween(bolt.x/Q-bolt.vx/Q,bolt.y/Q-bolt.vy/Q,bolt.x/Q,bolt.y/Q);
           this.effects.fillStyle(0xffffff);this.effects.fillCircle(bolt.x/Q,bolt.y/Q,3);
           this.effects.lineStyle(1,0x9aeaff);this.effects.strokeCircle(bolt.x/Q,bolt.y/Q,5);
+        }
+        // Presentation-only pool: six readable, non-overlapping bubbles at most.
+        // Stable actor order supplies deterministic visual priority in crowded casts.
+        this.bubbles.forEach(b=>b.setVisible(false));
+        const speech: {id:number;x:number;y:number;width:number;height:number}[]=[];
+        for(const u of s.units) {
+          if(s.outcome || u.hp<=0 || !u.cast || speech.length>=6) continue;
+          const x=Math.max(70,Math.min(314,u.x/Q));
+          const preferred=u.y/Q-61;
+          const candidates=[preferred,preferred-48,preferred+48,preferred-96];
+          const y=candidates.map(v=>Math.max(26,Math.min(486,v))).find(v=>speech.every(b=>Math.abs(b.x-x)>=138 || Math.abs(b.y-v)>=46));
+          if(y===undefined) continue;
+          const bubble=this.bubbles[speech.length]; bubble.setPosition(x,y).setVisible(true);
+          const g=bubble.list[0] as Phaser.GameObjects.Graphics;
+          const tipX=Math.max(-57,Math.min(57,u.x/Q-x));
+          const bottom=y<u.y/Q; const edge=bottom?20:-20; const tip=bottom?29:-29;
+          g.clear().fillStyle(0x111b2b,0.25).fillRoundedRect(-64,-17,132,40,11);
+          g.fillStyle(0xfffdf0).lineStyle(2,0x182235);
+          g.fillTriangle(tipX-7,edge,tipX+7,edge,tipX,tip);
+          g.strokeTriangle(tipX-7,edge,tipX+7,edge,tipX,tip);
+          g.fillRoundedRect(-66,-20,132,40,10);g.strokeRoundedRect(-66,-20,132,40,10);
+          speech.push({id:u.id,x,y,width:132,height:40});
         }
         const rendered: object[] = [];
         for (const u of s.units) {
@@ -243,7 +271,7 @@ export function Arena({ control }: { control: MutableRefObject<Control> }) {
             y:sprite.y, angle:sprite.angle, kickPhase, legVisible:leg.visible, legAngle:leg.angle, x:a.x, worldY:a.y, recoilLeft:u.recoilLeft, drop:crying ? emotion.drop : null, visible:a.visible });
           const dmg = this.damageLabels.get(u.id);
           text.setText(
-            crying ? "훌쩍…" : u.cast ? "야심!만만" : dmg && dmg.until >= s.tick
+            crying ? "훌쩍…" : u.cast ? "" : dmg && dmg.until >= s.tick
               ? `${u.flash === "crit" ? "✦ " : ""}−${(dmg.amount / 100).toFixed(1)}`
               : active
                 ? (
@@ -260,6 +288,7 @@ export function Arena({ control }: { control: MutableRefObject<Control> }) {
         }
         if (new URLSearchParams(location.search).has("diagnostics")) {
           host.current!.dataset.render = JSON.stringify(rendered);
+          host.current!.dataset.speech = JSON.stringify(speech);
           host.current!.dataset.feedback=JSON.stringify({particles:this.sparks.length,shake,projectiles:s.projectiles.length,clock:this.emotionClock});
         }
         if (time - this.stamp > 100) {
