@@ -219,10 +219,11 @@ export function Arena({ control }: { control: MutableRefObject<Control> }) {
             leg.fillStyle(0xf2c5a3); leg.fillRect(20, -4, 9, 8);
             leg.fillStyle(0xeef2f5); leg.fillRect(27, -5, 6, 10);
             leg.setVisible(false);
+            const stance=this.add.graphics();
             const fist=this.add.graphics();
             fist.fillStyle(0x7b8595);fist.fillRect(0,-3,12,6);
             fist.fillStyle(0xffd2ad);fist.fillRect(11,-4,8,8);fist.setVisible(false);
-            a = this.add.container(u.x / Q, u.y / Q, [sprite, bar, text, leg, fist]);
+            a = this.add.container(u.x / Q, u.y / Q, [sprite, bar, text, leg, fist, stance]);
             this.actors.set(u.id, a);
           }
           const sprite = a.list[0] as Phaser.GameObjects.Image,
@@ -257,6 +258,8 @@ export function Arena({ control }: { control: MutableRefObject<Control> }) {
           const leg = a.list[3] as Phaser.GameObjects.Graphics;
           leg.setVisible(false);
           const fist=a.list[4] as Phaser.GameObjects.Graphics;fist.setVisible(false);
+          const stance=a.list[5] as Phaser.GameObjects.Graphics;stance.clear().setVisible(false);
+          sprite.setCrop();
           const spinTick = s.tick + (c.paused || c.hidden ? 0 : this.debt / (1000 / 30));
           const winding = u.hp > 0 && !!u.kick;
           const recovering = u.hp > 0 && u.kickPoseUntil > 0 && s.tick <= u.kickPoseUntil;
@@ -281,12 +284,24 @@ export function Arena({ control }: { control: MutableRefObject<Control> }) {
             if(lockPhase==="lock") {
               const elapsed=LOCK.windup-(u.lock.due-s.tick);
               const slap=(elapsed>=7&&elapsed<11)||(elapsed>=21&&elapsed<25);kneeSlap=slap;
-              sprite.setScale(actorScale(u.character)*1.08,actorScale(u.character)*0.78).setY(-3);
-              this.effects.fillStyle(0xffd2ad);
+              // Reference-inspired wide, low sumo stance. Shared head/jacket pixels
+              // stay unchanged; only presentation limbs replace the standing legs.
+              const settle=this.reduced.matches?1:Math.min(1,elapsed/5);
+              const bend=slap?2:0;
+              sprite.setCrop(0,0,26,19).setScale(actorScale(u.character)).setY(-3+settle*3+bend).setAngle(0);
+              stance.setVisible(true);
               for(const side of [-1,1]) {
-                const handY=a.y+(slap?5:-2);
-                this.effects.fillRect(a.x+side*9-2,handY,5,4);
-                if(slap){this.effects.lineStyle(1,0xffe296);this.effects.strokeCircle(a.x+side*9,handY,6);}
+                // Hip -> outward knee -> planted foot: visibly bent, fitted black pants.
+                stance.lineStyle(6,0x161922,1);
+                stance.lineBetween(side*4,5+bend,side*15,8+bend);
+                stance.lineBetween(side*15,8+bend,side*19,18);
+                stance.fillStyle(0x10131e);stance.fillRect(side*19-5,17,10,4);
+                const handX=side*(slap?15:24), handY=slap?8+bend:-8;
+                stance.lineStyle(5,0x7c818c,1);
+                stance.lineBetween(side*10,-4+bend,side*18,slap?1:-5);
+                stance.lineBetween(side*18,slap?1:-5,handX,handY);
+                stance.fillStyle(0xffd2ad);stance.fillRect(handX-3,handY-2,6,5);
+                if(slap){stance.lineStyle(1,0xffe296);stance.strokeCircle(handX,handY,7);}
               }
             } else if(lockPhase==="prone") {
               sprite.setAngle(90).setY(2);
@@ -315,7 +330,7 @@ export function Arena({ control }: { control: MutableRefObject<Control> }) {
             }
           }
           rendered.push({ id:u.id, team:u.team, character:u.character, textureKey:sprite.texture.key, cast:!!u.cast, fleeing:u.fleeing, hitStop, hp:u.hp, crying, scale:sprite.scaleX,
-            y:sprite.y, angle:sprite.angle, kickPhase, lockPhase, kneeSlap, fistVisible:fist.visible, fistX:fist.x, fistY:fist.y, fistAngle:fist.angle, scaleY:sprite.scaleY, legVisible:leg.visible, legAngle:leg.angle, x:a.x, worldY:a.y, recoilLeft:u.recoilLeft, drop:crying ? emotion.drop : null, visible:a.visible });
+            y:sprite.y, angle:sprite.angle, kickPhase, lockPhase, kneeSlap, stanceVisible:stance.visible, stanceWidth:stance.visible?48:0, fistVisible:fist.visible, fistX:fist.x, fistY:fist.y, fistAngle:fist.angle, scaleY:sprite.scaleY, legVisible:leg.visible, legAngle:leg.angle, x:a.x, worldY:a.y, recoilLeft:u.recoilLeft, drop:crying ? emotion.drop : null, visible:a.visible });
           const dmg = this.damageLabels.get(u.id);
           text.setText(
             crying ? "훌쩍…" : u.cast ? "" : dmg && dmg.until >= s.tick

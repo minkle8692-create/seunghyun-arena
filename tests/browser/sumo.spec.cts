@@ -1,0 +1,28 @@
+import {test,expect} from '@playwright/test';
+import {mkdirSync,writeFileSync} from 'node:fs';
+const dir=process.env.SUMO_EVIDENCE||'evidence/sumo/local';
+for(const mobile of [false,true])test('sumo stance and knee slaps '+(mobile?'mobile':'desktop'),async({page})=>{
+ mkdirSync(dir,{recursive:true});if(mobile)await page.setViewportSize({width:390,height:844});
+ await page.goto('/?diagnostics=1');
+ await page.getByLabel('A 캐릭터',{exact:true}).selectOption('seokho');await page.getByLabel('B 캐릭터',{exact:true}).selectOption('mage');
+ for(const t of ['A','B'])await page.getByLabel(t+' 인원',{exact:true}).fill('1');
+ await page.evaluate(()=>{(window as any).frames=[];(window as any).timer=setInterval(()=>{const el=document.querySelector('.arena');(window as any).frames.push({r:JSON.parse(el?.getAttribute('data-render')||'[]'),s:(window as any).arenaDiagnostics?.snapshot()});},16);});
+ await page.getByRole('button',{name:'이 설정으로 시작 · 같은 시드',exact:true}).click();
+ await page.waitForFunction(()=>JSON.parse(document.querySelector('.arena')?.getAttribute('data-render')||'[]').some((a:any)=>a.stanceVisible&&!a.kneeSlap),null,{polling:16});
+ await page.getByRole('button',{name:'Ⅱ 일시정지',exact:true}).click();
+ const before=await page.locator('.arena').getAttribute('data-render');await page.waitForTimeout(150);expect(await page.locator('.arena').getAttribute('data-render')).toBe(before);
+ await page.screenshot({path:dir+'/'+(mobile?'mobile':'desktop')+'-open.png',fullPage:true});
+ await page.getByRole('button',{name:/재개/}).click();
+ await page.waitForFunction(()=>JSON.parse(document.querySelector('.arena')?.getAttribute('data-render')||'[]').some((a:any)=>a.kneeSlap),null,{polling:16});
+ await page.locator('.arena').screenshot({path:dir+'/'+(mobile?'mobile':'desktop')+'-slap.png'});
+ await page.waitForFunction(()=>JSON.parse(document.querySelector('.arena')?.getAttribute('data-render')||'[]').some((a:any)=>a.lockPhase==='dash'),null,{polling:16});
+ const frames:any[]=await page.evaluate(()=>{clearInterval((window as any).timer);return (window as any).frames});
+ const rows=frames.flatMap(f=>f.r.filter((a:any)=>a.character==='seokho'));expect(rows.some(a=>a.stanceWidth===48)).toBe(true);
+ let pulses=0,prev=false;for(const a of rows){if(a.kneeSlap&&!prev)pulses++;prev=a.kneeSlap;}expect(pulses).toBe(2);
+ expect(rows.filter(a=>a.lockPhase==='dash').every(a=>!a.stanceVisible)).toBe(true);
+ expect(frames.flatMap(f=>f.r).every((a:any)=>a.textureKey===a.character)).toBe(true);
+ expect(await page.evaluate(()=>document.documentElement.scrollWidth<=innerWidth)).toBe(true);
+ await page.getByRole('button',{name:'↻ 같은 시드 재시작',exact:true}).click();
+ await expect.poll(async()=>JSON.parse(await page.locator('.arena').getAttribute('data-render')||'[]').some((a:any)=>a.stanceVisible)).toBe(false);
+ writeFileSync(dir+'/'+(mobile?'mobile':'desktop')+'.json',JSON.stringify({pulses,frames},null,2));
+});
