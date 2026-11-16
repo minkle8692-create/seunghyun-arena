@@ -1,5 +1,5 @@
 // Authority for all combat. Integer centi-HP/energy and 1/256-pixel coordinates.
-export const VERSION = "arena-1.3.0",
+export const VERSION = "arena-1.4.0",
   Q = 256,
   W = 384 * Q,
   H = 512 * Q,
@@ -13,7 +13,9 @@ export const KICK = {
   cost: 2400,
   range: 44 * Q,
   limit: 6,
-  knockback: 18 * Q,
+  knockback: 44 * Q,
+  recoilTicks: 12,
+  recoveryTicks: 6,
 } as const;
 export type Kick = { due: number; dx: number; dy: number };
 export type Stats = [number, number, number, number, number, number];
@@ -38,6 +40,13 @@ export const attackDelay = (speed: number, fatigue: number) => Math.max(6, Math.
   (speed <= 10 ? 42 - 2 * speed : 220 / speed) * 1000 /
   (650 + Math.floor(350 * Math.max(0, Math.min(1000, fatigue)) / 1000))
 ));
+export const COMBAT_MODIFIERS = { youthDamage: 1.3, adultAttackSpeed: 1.5 } as const;
+export const normalDelay = (team: Team, speed: number, fatigue: number) =>
+  team === "B" ? Math.max(4, Math.ceil(attackDelay(speed, fatigue) * 2 / 3)) : attackDelay(speed, fatigue);
+export const normalDamage = (team: Team, power: number, defense: number, jitter: number, crit: boolean) => {
+  const base = damage(power, defense, jitter, crit);
+  return team === "A" ? Math.floor((base * 13 + 5) / 10) : base;
+};
 export type Attack = {
   target: number;
   due: number;
@@ -64,8 +73,11 @@ export type Unit = {
   attack: Attack | null;
   kick: Kick | null;
   kickNext: number;
+  kickPoseUntil: number;
   kx: number;
   ky: number;
+  recoilLeft: number;
+  stunnedUntil: number;
   rem: number;
   flash: string;
   flashUntil: number;
@@ -204,8 +216,11 @@ export function createBattle(input: Config, seed: number): Battle {
         attack: null,
         kick: null,
         kickNext: 0,
+        kickPoseUntil: 0,
         kx: 0,
         ky: 0,
+        recoilLeft: 0,
+        stunnedUntil: 0,
         rem: 0,
         flash: "idle",
         flashUntil: 0,
@@ -361,7 +376,7 @@ export function step(s: Battle) {
     }
     let mx = 0,
       my = 0;
-    if (t && !u.attack && !u.kick && dist(u, t) > (19 * Q) ** 2) {
+    if (s.tick > u.stunnedUntil && t && !u.attack && !u.kick && dist(u, t) > (19 * Q) ** 2) {
       let dx = t.x - u.x,
         dy = t.y - u.y;
       let blocked = false;
@@ -386,9 +401,14 @@ export function step(s: Battle) {
       [mx, my] = norm(dx, dy, speed);
       if (s.tick > u.flashUntil) u.flash = "walk";
     } else if (s.tick > u.flashUntil) u.flash = "idle";
-    moves.set(u.id, [mx + u.kx, my + u.ky]);
-    u.kx = 0;
-    u.ky = 0;
+    if (u.recoilLeft > 0) {
+      const rx = round(u.kx / u.recoilLeft), ry = round(u.ky / u.recoilLeft);
+      moves.set(u.id, [rx, ry]);
+      u.kx -= rx; u.ky -= ry; u.recoilLeft--;
+    } else {
+      moves.set(u.id, [mx + u.kx, my + u.ky]);
+      u.kx = 0; u.ky = 0;
+    }
     if (!u.attack && !u.kick && s.tick - u.last >= 30)
       u.energy = Math.min(u.maxEnergy, u.energy + 12 + 3 * u.stats[1]);
   }
@@ -404,6 +424,7 @@ export function step(s: Battle) {
     { sum: number; x: number; y: number; ids: number[]; kick?: boolean }
   >();
   for (const u of live) {
+    if (s.tick <= u.stunnedUntil) continue;
     const t = byId.get(u.target);
     if (
       u.team === "B" &&
@@ -457,6 +478,7 @@ export function step(s: Battle) {
           });
         }
         u.kick = null;
+        u.kickPoseUntil = s.tick + 10;
         u.flash = "kick";
         u.flashUntil = s.tick + 10;
         s.events.push({
@@ -481,12 +503,12 @@ export function step(s: Battle) {
       const f = Math.min(1000, Math.floor((u.energy * 4000) / u.maxEnergy));
       u.next =
         s.tick +
-        attackDelay(u.stats[4], f);
+        normalDelay(u.team, u.stats[4], f);
       u.energy -= 800;
       u.last = s.tick;
       u.attack = {
         target: t.id,
-        due: s.tick + 6,
+        due: s.tick + (u.team === "B" ? 4 : 6),
         serial: ++u.serial,
         hit: roll(u, 1000),
         damage: 95 + roll(u, 11),
@@ -520,7 +542,7 @@ export function step(s: Battle) {
     } else {
       const crit = a.crit < 5;
       ev.kind = crit ? "crit" : "hit";
-      ev.damage = damage(u.stats[3], v.stats[5], a.damage, crit);
+      ev.damage = normalDamage(u.team, u.stats[3], v.stats[5], a.damage, crit);
       s.counts.hit++;
       if (crit) s.counts.crit++;
       const h = hits.get(v.id) || { sum: 0, x: 0, y: 0, ids: [] };
@@ -544,7 +566,19 @@ export function step(s: Battle) {
       s.counts.damage += actual;
       const len = isqrt(h.x * h.x + h.y * h.y);
       const cap = h.kick ? KICK.knockback : 4 * Q;
-      [u.kx, u.ky] = len > cap ? norm(h.x, h.y, cap) : [h.x, h.y];
+      if (h.kick || u.recoilLeft === 0) {
+        [u.kx, u.ky] = len > cap ? norm(h.x, h.y, cap) : [h.x, h.y];
+      }
+      if (h.kick) {
+        u.recoilLeft = KICK.recoilTicks;
+        u.stunnedUntil = s.tick + KICK.recoilTicks + KICK.recoveryTicks;
+        // Resolution remains simultaneous; only future pending actions are interrupted.
+        if (u.attack) {
+          s.events.push({ tick:s.tick, kind:"canceled", actor:u.id, target:u.attack.target, attack:u.attack, reason:"kick_recoil" });
+          s.counts.canceled++; u.attack = null;
+        }
+        u.kick = null;
+      }
       s.events.push({
         tick: s.tick,
         kind: "damage",
@@ -598,7 +632,8 @@ export function summarize(s: Battle) {
   return {
     simVersion: VERSION,
     configSchemaVersion: 1,
-    resultSchemaVersion: 2,
+    resultSchemaVersion: 3,
+    combatModifiers: { ...COMBAT_MODIFIERS },
     statMultipliers: { ...STAT_MULTIPLIERS },
     effectiveStats: { A: effectiveStats("A", s.config.A.stats), B: effectiveStats("B", s.config.B.stats) },
     rngVersion: "lcg32-reject-v1",

@@ -1,36 +1,51 @@
 # 승현 VS 승현 — Pixel Arena
 
-Original unarmed pixel-art auto-battler, built with React, TypeScript and Phaser. A wears square glasses and a sky-blue/white school shirt; B wears a fitted black tee. All gameplay runs locally in your browser, including the 100-trial Web Worker. No photos, accounts or server required.
+Original, non-bloody pixel auto-battler. React 19 + Vite + TypeScript + Phaser **3.90**, one authoritative pure TS engine shared by the renderer and a module Worker. No server, account, analytics, paid API, remote art or runtime network dependencies.
 
 ## Run
 
 ```sh
 npm ci
 npm run dev
-```
-
-## Verify
-
-```sh
-npm run typecheck
 npm test
+npm run typecheck
 npm run build
-mkdir -p evidence
-PLAYWRIGHT_BROWSERS_PATH=./.playwright-browsers npx playwright install chromium
-PLAYWRIGHT_BROWSERS_PATH=./.playwright-browsers npm run test:e2e
+npm run preview
+# Install Playwright into a project-local cache on a clean machine:
+PLAYWRIGHT_BROWSERS_PATH="$PWD/.playwright-browsers" npx playwright install chromium
+PLAYWRIGHT_BROWSERS_PATH="$PWD/.playwright-browsers" NO_PROXY=localhost,127.0.0.1 npm run test:e2e
 ```
 
-## Static deployment
+Static output: `dist/`. Hosting/build instructions only; this implementation does not deploy or publish. Parent owns GitHub/Render. `npm run build` and output directory `dist` suffice for a static host. There are no required secrets or environment variables.
 
-Build: `npm ci && npm run build`
-Publish directory: `dist`
+## Play
 
-## Limits
+Default A50 `[10,10,4,6,8,8]`, B1 `[7,7,9,8,6,3]` in HP/stamina/skill/power/speed/defense order. Each team 1–100, stats 1–10. Change the draft, then choose “이 설정으로 시작” to apply with the current seed. “같은 시드 재시작” replays the **running** configuration. “새 시드 전투” starts the draft using a newly generated seed. Config is frozen after launch. Draft and last run have separate versioned localStorage keys. Failed reads/writes recover with visible notices.
 
-Mobile viewport testing is not physical-device certification. The Phaser bundle is about 1.7 MB minified. No multiplayer or sound. Identical-version deterministic results are tested in Chromium; cross-engine replay equality and long thermal soaks are not certified. 100 trials are a game simulation sample, not real-world odds.
+Win = opponent eliminated and own survivors. Both eliminated on the same tick = draw. Both alive at 180 simulation seconds = unresolved timeout. No HP/score winner, no early heuristic stalemate. A last-tick KO takes priority over timeout.
 
-## v1.3 rules
+Batch uses the current draft and the displayed seed as master seed, pauses viewing, then executes 100 fresh trials sequentially in a real Worker. Pause/resume ACK occurs at completed-tick boundaries; cancel retains finished rows and classifies the interrupted row separately. Every row includes full config, seed, rules version, state hash, outcome/reason, counters, pending attacks, alive/HP totals. Export JSON to retain results. No batch reload recovery. Percentages use wins + draw + timeout; zero denominator is unavailable, not 0%.
 
-Teams are 14세 승현 and 35세 승현; arena sprites use youth1.05x/adult1.4x with unchanged 8px collision radius. Only 35세 승현 has a telegraphed sweeping kick: 0.4s windup, 4s cooldown from activation, 24 stamina, 44px center range, full 360-degree radial sweep, nearest six unobstructed enemies. Contact does 80% normal base damage, without crit, and up to 18px knockback (wall/body-constrained). Normal landed critical chance stays 0.5%, multiplier 1.5x. Both attacks resolve simultaneously in the same deterministic engine/Worker. The crowd separation solver now allows 96 identical iterations for the larger impulse. Older-version seeds do not promise identical outcomes.
+## Rules (arena-1.4.0)
 
-Explicit adult input boost: all six B base stats are multiplied by5 once; sliders and storage remain1..10. Defaults become35/35/45/40/30/15; HP370/energy290. A and counts unchanged. Skill hit probability5–95%, defense>10 uses diminishing positive damage coefficient, speed attack interval minimum6ticks. Full rules and effective inputs are visible in Korean. Winner survivors have comic tears; pause/restart/reduced-motion supported.
+- Fixed30Hz deterministic shared TS simulation/Worker, body radius8px, simultaneous damage/KO; surviving team only wins. Timeout is unresolved.
+- Base sliders1..10, A input multiplier1/B multiplier5, once at spawn. Default B effective35/35/45/40/30/15. No hidden age bonuses.
+- HP55+9H, energy45+7E; power, skill, movement, recovery and defense all consume effective inputs. Hit probability clamped5..95%; normal landed crit fixed0.5%, damage1.5x.
+- A normal damage = floor((rounded base centiHP damage*13+5)/10). Power unchanged. B normal delay = ceil(base delay*2/3), min4ticks, windup4ticks. Base delay includes fatigue, uses42-2S up to10 and220/S above10 (min6). No extra multiplier on derived stats.
+- Extended defense multiplier is floor(65000/(100+7*(D-10)))/1000 above10, otherwise1-.035D. All damage positive. Full formula in sim.ts.
+- B radial kick:360degrees,44px center range, six closest unoccluded enemies, preparation12ticks/cooldown120/cost24;80% base normal damage, no critical. Bodies block attack lines.
+- Kick recoil target44px over12ticks (0.4s), plus6ticks recovery. AI movement/attacks disabled for18ticks, pending future attacks interrupted AFTER simultaneous resolution. Walls clamp, crowded-body separation can reduce/redirect movement; never claim44px net through walls/crowds. Normal hits do not overwrite an active kick recoil. Ordinary knockback capped4px.
+-96-iteration Jacobi body separation with spatial partition, fixed-point movement. Same seed/config/rules reproduce results; version1.4 changes previous outcomes. Export schema3 includes explicit combat modifiers and effective inputs; stored schema1 remains base stats.
+- A visual1.05/B1.4, actual rotating body/extended-leg kick, survivor-winner tears. Reduced motion removes spin/bob; pause/reset cleans presentation. Visual scale never changes collision radius.
+
+## Structure
+
+- `src/sim.ts`: createBattle / step / summarize, canonical config, RNG, grid and hash.
+- `src/Arena.tsx`: Phaser rendering + wall-clock runner; render never owns combat.
+- `src/batch.worker.ts`: same engine, 12ms task chunks, job IDs and control ACKs.
+- `src/statistics.ts`, `src/storage.ts`: denominator rules and defensive persistence.
+- `src/main.tsx`, `src/style.css`: Korean responsive controls and original art presentation.
+- `tests/`: invariant tests and real production-browser integration.
+- `evidence/`, `REPORT.md`: measured results and exact validation limits.
+
+Append `?diagnostics=1` to enable the read-only engine/Worker test factory on `window.arenaDiagnostics`. It has no credentials or filesystem access. Normal pages do not load this helper.

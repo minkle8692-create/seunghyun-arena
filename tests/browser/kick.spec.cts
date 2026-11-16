@@ -21,24 +21,20 @@ test("live controls show named teams and visible multi-target kick with knockbac
   await page.getByRole("button", { name: "Ⅱ 일시정지", exact: true }).click();
   await page.screenshot({ path: "evidence/kick-windup.png", fullPage: true });
   await page.getByRole("button", { name: "▶ 전투 시작 / 재개" }).click();
-  await page.waitForFunction(
-    () => {
-      const s = (window as any).arenaDiagnostics.snapshot();
-      return s.events.filter((e: any) => e.kind === "kick_hit").length >= 2;
-    },
-    {},
-    { polling: 16 },
-  );
-  const hit = await page.evaluate(() => {
+  // Capture the transient event and its impulse in the SAME browser task.
+  // A second evaluate could run one tick later after events/impulses reset.
+  const hitHandle = await page.waitForFunction(() => {
     const s = (window as any).arenaDiagnostics.snapshot();
+    if (s.events.filter((e: any) => e.kind === "kick_hit").length < 2) return false;
     return {
       tick: s.tick,
       events: s.events,
-      targets: s.units
-        .filter((u: any) => u.kx || u.ky)
+      targets: s.units.filter((u: any) => u.kx || u.ky)
         .map((u: any) => ({ id: u.id, x: u.x, y: u.y, kx: u.kx, ky: u.ky })),
     };
-  });
+  }, {}, { polling: 16 });
+  const hit: any = await hitHandle.jsonValue();
+  await hitHandle.dispose();
   expect(
     hit.events.filter((e: any) => e.kind === "kick_hit").length,
   ).toBeGreaterThanOrEqual(2);
@@ -46,7 +42,7 @@ test("live controls show named teams and visible multi-target kick with knockbac
     true,
   );
   await page.waitForFunction(
-    (tick) => (window as any).arenaDiagnostics.snapshot().tick >= tick + 2,
+    (tick) => (window as any).arenaDiagnostics.snapshot().tick >= tick + 12,
     hit.tick,
   );
   const pushed = await page.evaluate(() =>

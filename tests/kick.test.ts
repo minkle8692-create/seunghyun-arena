@@ -47,14 +47,14 @@ describe("explicit B-only kick", () => {
     expect(s.events.filter((e) => e.kind === "kick_hit")).toHaveLength(3);
     for (const u of s.units.slice(0, 3)) {
       expect(u.hp).toBeLessThan(u.maxHp);
-      expect(Math.hypot(u.kx, u.ky) / Q).toBeGreaterThan(17.9);
+      expect(Math.hypot(u.kx, u.ky) / Q).toBeGreaterThan(43.9);
     }
     const positions = s.units.slice(0, 3).map((u) => ({ x: u.x, y: u.y }));
-    step(s);
+    for (let i=0;i<KICK.recoilTicks;i++) step(s);
     for (const [i, u] of s.units.slice(0, 3).entries())
       expect(
         Math.hypot(u.x - positions[i].x, u.y - positions[i].y) / Q,
-      ).toBeGreaterThan(17);
+      ).toBeGreaterThan(40);
     expect(s.counts.crit).toBe(0);
     expect(s.counts.hit).toBe(0);
     expect(b.kickNext).toBe(121);
@@ -147,11 +147,11 @@ describe("explicit B-only kick", () => {
     step(s);
     expect(s.events.filter((e) => e.kind === "kick_hit")).toHaveLength(6);
     const before = s.units.slice(0, 6).map((u) => ({ x: u.x, y: u.y }));
-    step(s);
+    for (let i=0;i<KICK.recoilTicks;i++) step(s);
     s.units.slice(0, 6).forEach((u, i) => {
       expect(
         Math.hypot(u.x - before[i].x, u.y - before[i].y) / Q,
-      ).toBeGreaterThan(17.9);
+      ).toBeGreaterThan(43.9);
       expect(u.x).toBeGreaterThanOrEqual(R);
       expect(u.y).toBeGreaterThanOrEqual(R);
     });

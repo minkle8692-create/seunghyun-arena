@@ -105,7 +105,7 @@ export function Arena({ control }: { control: MutableRefObject<Control> }) {
         for (const u of s.units) {
           if (
             u.hp > 0 &&
-            (u.kick || (u.flash === "kick" && s.tick <= u.flashUntil))
+            (u.kick || (u.kickPoseUntil > 0 && s.tick <= u.kickPoseUntil))
           ) {
             const progress = u.kick
               ? 1 - (u.kick.due - s.tick) / KICK.windup
@@ -138,7 +138,12 @@ export function Arena({ control }: { control: MutableRefObject<Control> }) {
                 strokeThickness: 2,
               })
               .setOrigin(0.5);
-            a = this.add.container(u.x / Q, u.y / Q, [sprite, bar, text]);
+            const leg = this.add.graphics();
+            leg.fillStyle(0x131d2b); leg.fillRect(0, -4, 23, 8);
+            leg.fillStyle(0xf2c5a3); leg.fillRect(20, -4, 9, 8);
+            leg.fillStyle(0xeef2f5); leg.fillRect(27, -5, 6, 10);
+            leg.setVisible(false);
+            a = this.add.container(u.x / Q, u.y / Q, [sprite, bar, text, leg]);
             this.actors.set(u.id, a);
           }
           const sprite = a.list[0] as Phaser.GameObjects.Image,
@@ -165,6 +170,23 @@ export function Arena({ control }: { control: MutableRefObject<Control> }) {
               ? 0xffc9bc
               : 0xffffff,
           );
+          const leg = a.list[3] as Phaser.GameObjects.Graphics;
+          leg.setVisible(false);
+          const spinTick = s.tick + (c.paused || c.hidden ? 0 : this.debt / (1000 / 30));
+          const winding = u.hp > 0 && !!u.kick;
+          const recovering = u.hp > 0 && u.kickPoseUntil > 0 && s.tick <= u.kickPoseUntil;
+          let kickPhase = "none";
+          if (winding || recovering) {
+            const p = winding ? Math.max(0, Math.min(1, 1 - (u.kick!.due - spinTick) / KICK.windup))
+              : Math.max(0, Math.min(1, (spinTick - (u.kickPoseUntil - 10)) / 10));
+            kickPhase = winding ? "windup" : "spin-recovery";
+            const angle = this.reduced.matches ? 0 : winding ? -40 * p : -40 + 400 * Math.min(1, p / 0.7);
+            sprite.setAngle(angle).setY(-8 - (this.reduced.matches ? 0 : Math.sin(p * Math.PI) * 4));
+            leg.setVisible(true).setPosition(0, -3).setAngle(angle + 15)
+              .setScale(winding ? 0.25 + 0.35 * p : 1 - 0.65 * p);
+          } else if (u.hp > 0 && u.recoilLeft > 0 && !this.reduced.matches) {
+            sprite.setAngle(u.kx >= 0 ? -20 : 20).setY(-10);
+          }
           const crying = cries(s.outcome, u.team, u.hp);
           const emotion = sobFrame(this.emotionClock, u.id, this.reduced.matches);
           if (crying) {
@@ -180,7 +202,7 @@ export function Arena({ control }: { control: MutableRefObject<Control> }) {
             }
           }
           rendered.push({ id:u.id, team:u.team, hp:u.hp, crying, scale:sprite.scaleX,
-            y:sprite.y, angle:sprite.angle, drop:crying ? emotion.drop : null, visible:a.visible });
+            y:sprite.y, angle:sprite.angle, kickPhase, legVisible:leg.visible, legAngle:leg.angle, x:a.x, worldY:a.y, recoilLeft:u.recoilLeft, drop:crying ? emotion.drop : null, visible:a.visible });
           const dmg = this.damageLabels.get(u.id);
           text.setText(
             crying ? "훌쩍…" : dmg && dmg.until >= s.tick
