@@ -47,14 +47,20 @@ describe("explicit B-only kick", () => {
     expect(s.events.filter((e) => e.kind === "kick_hit")).toHaveLength(3);
     for (const u of s.units.slice(0, 3)) {
       expect(u.hp).toBeLessThan(u.maxHp);
-      expect(Math.hypot(u.kx, u.ky) / Q).toBeGreaterThan(9.9);
+      expect(Math.hypot(u.kx, u.ky) / Q).toBeGreaterThan(17.9);
     }
+    const positions = s.units.slice(0, 3).map((u) => ({ x: u.x, y: u.y }));
+    step(s);
+    for (const [i, u] of s.units.slice(0, 3).entries())
+      expect(
+        Math.hypot(u.x - positions[i].x, u.y - positions[i].y) / Q,
+      ).toBeGreaterThan(17);
     expect(s.counts.crit).toBe(0);
     expect(s.counts.hit).toBe(0);
     expect(b.kickNext).toBe(121);
     expect(R).toBe(8 * Q);
   });
-  it("excludes outside arc/range, friends, KO and obstructed rear targets; caps targets", () => {
+  it("hits all directions but excludes outside range, friends, KO and obstructed rear targets; caps targets", () => {
     const { s, b } = fixture();
     const k = { due: 1, dx: Q, dy: 0 };
     const unit = (id: number, x: number, y: number, team: "A" | "B" = "A") => ({
@@ -65,26 +71,26 @@ describe("explicit B-only kick", () => {
       team,
     });
     for (const v of [
-      unit(5, -20, 0),
-      unit(5, 0, 25),
-      unit(5, 33, 0),
+      unit(5, 45, 0),
       unit(5, 20, 0, "B"),
       { ...unit(5, 20, 0), hp: 0 },
     ])
       expect(kickTargets(b, k, new Grid([b, v]))).toEqual([]);
+    for (const v of [unit(5, -30, 0), unit(5, 0, 30), unit(5, 44, 0)])
+      expect(kickTargets(b, k, new Grid([b, v]))).toEqual([v]);
     const front = unit(5, 16, 0),
       rear = unit(6, 32, 0);
     expect(
       kickTargets(b, k, new Grid([b, front, rear])).map((u) => u.id),
     ).toEqual([5]);
-    const many = Array.from({ length: 5 }, (_, i) =>
+    const many = Array.from({ length: 8 }, (_, i) =>
       unit(
         i + 10,
-        32 * Math.cos(((i - 2) * Math.PI) / 6),
-        32 * Math.sin(((i - 2) * Math.PI) / 6),
+        40 * Math.cos((i * Math.PI) / 4),
+        40 * Math.sin((i * Math.PI) / 4),
       ),
     );
-    expect(kickTargets(b, k, new Grid([b, ...many]))).toHaveLength(4);
+    expect(kickTargets(b, k, new Grid([b, ...many]))).toHaveLength(6);
   });
   it("respects insufficient stamina, cooldown and team restriction", () => {
     for (const mode of ["energy", "cooldown", "team"]) {
@@ -100,12 +106,12 @@ describe("explicit B-only kick", () => {
       expect(s.events.some((e) => e.kind === "kick_windup")).toBe(false);
     }
   });
-  it("locked direction misses targets that leave and simultaneous fatal attacks still resolve", () => {
+  it("radial heading is irrelevant and simultaneous fatal attacks still resolve and simultaneous fatal attacks still resolve", () => {
     const { s, b } = fixture();
     b.kick = { due: 1, dx: -Q, dy: 0 };
     b.next = 999;
     step(s);
-    expect(s.events.filter((e) => e.kind === "kick_hit")).toHaveLength(0);
+    expect(s.events.filter((e) => e.kind === "kick_hit")).toHaveLength(3);
     const f = fixture();
     f.b.kick = { due: 1, dx: Q, dy: 0 };
     f.b.next = 999;
@@ -115,6 +121,40 @@ describe("explicit B-only kick", () => {
     for (const u of f.s.units.slice(0, 3)) u.hp = 1;
     step(f.s);
     expect(f.s.outcome).toBe("draw");
+  });
+  it("strikes six surrounding enemies and resolves outward displacement with wall bounds", () => {
+    const s = createBattle(
+      { A: { ...DEFAULT.A, count: 6 }, B: { ...DEFAULT.B, count: 1 } },
+      123,
+    );
+    const b = s.units[6];
+    b.x = 160 * Q;
+    b.y = 250 * Q;
+    b.kick = { due: 1, dx: Q, dy: 0 };
+    b.next = 999;
+    s.units.slice(0, 6).forEach((u, i) => {
+      u.x = b.x + Math.round(38 * Q * Math.cos((i * Math.PI) / 3));
+      u.y = b.y + Math.round(38 * Q * Math.sin((i * Math.PI) / 3));
+      u.attack = {
+        target: 6,
+        due: 999,
+        serial: 1,
+        hit: 0,
+        damage: 100,
+        crit: 999,
+      };
+    });
+    step(s);
+    expect(s.events.filter((e) => e.kind === "kick_hit")).toHaveLength(6);
+    const before = s.units.slice(0, 6).map((u) => ({ x: u.x, y: u.y }));
+    step(s);
+    s.units.slice(0, 6).forEach((u, i) => {
+      expect(
+        Math.hypot(u.x - before[i].x, u.y - before[i].y) / Q,
+      ).toBeGreaterThan(17.9);
+      expect(u.x).toBeGreaterThanOrEqual(R);
+      expect(u.y).toBeGreaterThanOrEqual(R);
+    });
   });
   it("reordered entities produce identical multi-target damage and knockback", () => {
     const { s } = fixture();

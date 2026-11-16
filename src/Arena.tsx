@@ -101,35 +101,21 @@ export function Arena({ control }: { control: MutableRefObject<Control> }) {
             u.hp > 0 &&
             (u.kick || (u.flash === "kick" && s.tick <= u.flashUntil))
           ) {
-            const angle = u.kick
-              ? Math.atan2(u.kick.dy, u.kick.dx)
-              : Math.atan2(
-                  (s.units.find((v) => v.id === u.target)?.y ?? u.y) - u.y,
-                  (s.units.find((v) => v.id === u.target)?.x ?? u.x) - u.x,
-                );
+            const progress = u.kick
+              ? 1 - (u.kick.due - s.tick) / KICK.windup
+              : 1;
             this.effects.lineStyle(
               u.kick ? 2 : 4,
               u.kick ? 0xffcf66 : 0xffffff,
-              0.85,
+              0.9,
             );
-            this.effects.beginPath();
-            this.effects.arc(
+            this.effects.strokeCircle(u.x / Q, u.y / Q, KICK.range / Q);
+            this.effects.lineStyle(2, 0xffcf66, 0.65);
+            this.effects.strokeCircle(
               u.x / Q,
               u.y / Q,
-              KICK.range / Q,
-              angle - Math.PI / 3,
-              angle + Math.PI / 3,
+              (KICK.range / Q) * (u.kick ? progress : 1.12),
             );
-            this.effects.strokePath();
-            if (u.kick) {
-              for (const edge of [angle - Math.PI / 3, angle + Math.PI / 3])
-                this.effects.lineBetween(
-                  u.x / Q,
-                  u.y / Q,
-                  u.x / Q + Math.cos(edge) * 32,
-                  u.y / Q + Math.sin(edge) * 32,
-                );
-            }
           }
           let a = this.actors.get(u.id);
           if (!a) {

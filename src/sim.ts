@@ -1,19 +1,19 @@
 // Authority for all combat. Integer centi-HP/energy and 1/256-pixel coordinates.
-export const VERSION = "arena-1.1.0",
+export const VERSION = "arena-1.2.0",
   Q = 256,
   W = 384 * Q,
   H = 512 * Q,
   R = 8 * Q,
   RANGE = 22 * Q,
   CAP = 5400;
-// Explicit B-only sweep: 0.4s wind-up, 4s cooldown, 24 energy, 32px/120°, 4 targets.
+// Explicit B-only sweep: 0.4s wind-up, 4s cooldown, 24 energy, 44px/360°, 6 targets.
 export const KICK = {
   windup: 12,
   cooldown: 120,
   cost: 2400,
-  range: 32 * Q,
-  limit: 4,
-  knockback: 10 * Q,
+  range: 44 * Q,
+  limit: 6,
+  knockback: 18 * Q,
 } as const;
 export type Kick = { due: number; dx: number; dy: number };
 export type Stats = [number, number, number, number, number, number];
@@ -268,8 +268,7 @@ export function occluded(a: Unit, b: Unit, grid: Grid) {
   }
   return false;
 }
-export function kickTargets(u: Unit, kick: Kick, grid: Grid) {
-  const l = kick.dx ** 2 + kick.dy ** 2;
+export function kickTargets(u: Unit, _kick: Kick, grid: Grid) {
   return grid
     .near(u.x, u.y, KICK.range)
     .filter((v) => {
@@ -277,14 +276,7 @@ export function kickTargets(u: Unit, kick: Kick, grid: Grid) {
       const dx = v.x - u.x,
         dy = v.y - u.y,
         d = dx * dx + dy * dy;
-      const dot = dx * kick.dx + dy * kick.dy;
-      return (
-        d > 0 &&
-        d <= KICK.range ** 2 &&
-        dot > 0 &&
-        4 * dot * dot >= d * l &&
-        !occluded(u, v, grid)
-      );
+      return d > 0 && d <= KICK.range ** 2 && !occluded(u, v, grid);
     })
     .sort((a, b) => dist(u, a) - dist(u, b) || a.id - b.id)
     .slice(0, KICK.limit);

@@ -6,7 +6,8 @@ test("live controls show named teams and visible multi-target kick with knockbac
   await page.goto("/?diagnostics=1");
   await expect(page.locator(".score.A b")).toHaveText("14세 승현");
   await expect(page.locator(".score.B b")).toHaveText("35세 승현");
-  await expect(page.getByTestId("kick-rules")).toContainText("최대 4명");
+  await expect(page.getByTestId("kick-rules")).toContainText("최대 6명");
+  await expect(page.getByTestId("kick-rules")).toContainText("360°");
   await page.waitForFunction(() => !!(window as any).arenaDiagnostics);
   await page.getByRole("button", { name: "▶ 전투 시작 / 재개" }).click();
   await page.waitForFunction(
@@ -35,15 +36,28 @@ test("live controls show named teams and visible multi-target kick with knockbac
       events: s.events,
       targets: s.units
         .filter((u: any) => u.kx || u.ky)
-        .map((u: any) => ({ id: u.id, kx: u.kx, ky: u.ky })),
+        .map((u: any) => ({ id: u.id, x: u.x, y: u.y, kx: u.kx, ky: u.ky })),
     };
   });
   expect(
     hit.events.filter((e: any) => e.kind === "kick_hit").length,
   ).toBeGreaterThanOrEqual(2);
-  expect(hit.targets.some((u: any) => Math.hypot(u.kx, u.ky) > 4 * 256)).toBe(
+  expect(hit.targets.some((u: any) => Math.hypot(u.kx, u.ky) > 17 * 256)).toBe(
     true,
   );
+  await page.waitForFunction(
+    (tick) => (window as any).arenaDiagnostics.snapshot().tick >= tick + 2,
+    hit.tick,
+  );
+  const pushed = await page.evaluate(() =>
+    (window as any).arenaDiagnostics.snapshot(),
+  );
+  const displacement = hit.targets.map((u: any) => {
+    const v = pushed.units.find((v: any) => v.id === u.id);
+    return { id: u.id, pixels: Math.hypot(v.x - u.x, v.y - u.y) / 256 };
+  });
+  expect(displacement.some((u: any) => u.pixels > 8)).toBe(true);
+  Object.assign(hit, { displacement, afterTick: pushed.tick });
   await page.getByRole("button", { name: "Ⅱ 일시정지", exact: true }).click();
   await page.screenshot({ path: "evidence/kick-impact.png", fullPage: true });
   await page.locator(".logs summary").click();
