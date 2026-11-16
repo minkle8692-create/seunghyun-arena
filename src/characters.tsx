@@ -31,13 +31,17 @@ export const characters: Record<Character, readonly PixelRect[]> = {
     [8,8,3,1,ink], [14,8,2,1,ink], [11,11,4,1,0xffffff],
   ],
   seokho: [
-    [5,24,15,2,ink],[6,20,5,5,0x394d64],[14,20,5,5,0x394d64],
-    [3,12,19,10,ink],[4,13,17,8,0xa4d8ee],[7,17,11,5,0xe4f3fa],
-    [2,15,4,6,skin],[20,15,4,6,skin],[7,13,4,2,0x3977ac],[14,13,4,2,0x3977ac],
-    [6,2,13,10,ink],[7,5,11,8,skin],[5,7,2,4,skin],[18,7,2,4,skin],
-    [6,1,12,4,ink],[8,0,3,2,ink],[15,1,3,3,ink],
-    [7,7,5,3,ink],[13,7,5,3,ink],[11,8,3,1,ink],
-    [8,8,3,1,0xdaf1fb],[14,8,3,1,0xdaf1fb],[10,11,5,1,0xffffff],
+    // Upright short hair, gray jacket and fitted black trousers; original pixels only.
+    [5,24,15,2,ink],[7,20,4,5,0x161922],[14,20,4,5,0x161922],
+    [3,12,19,10,ink],[4,13,17,8,0x7c818c],[10,13,5,9,0x252934],
+    [4,13,5,8,0x9398a2],[16,13,5,8,0x9398a2],
+    [8,13,2,5,0xb5bac2],[15,13,2,5,0xb5bac2],
+    [2,14,3,5,0x7c818c],[21,14,3,5,0x7c818c],
+    [2,19,3,3,skin],[21,19,3,3,skin],
+    [6,3,13,9,ink],[7,5,11,8,skin],[5,7,2,4,skin],[18,7,2,4,skin],
+    [6,2,13,3,ink],[7,0,2,3,ink],[10,0,2,3,ink],[13,0,2,3,ink],[16,0,2,3,ink],
+    [7,3,11,1,0x303541],[8,7,3,1,ink],[14,7,3,1,ink],
+    [9,8,1,1,ink],[15,8,1,1,ink],[10,11,5,1,0xffffff],
   ],
   mage: [
     [5,24,6,2,ink],[14,24,6,2,ink],[5,21,15,3,0x405273],
@@ -59,7 +63,7 @@ export const characters: Record<Character, readonly PixelRect[]> = {
 export const descriptions = {
   youth: "14세 승현 · 삐죽 검은 머리, 네모 안경, 파란 깃 하늘색 반팔 교복",
   adult: "35세 승현 · 검은 머리, 검은 반팔 티셔츠, 넓은 어깨와 근육질 체형",
-  seokho: "25세 석호 · 검은 머리와 안경, 하늘색 상의, 중간 체격의 록온 격투가",
+  seokho: "25세 석호 · 짧게 세운 검은 머리, 회색 재킷과 검은 밀착 바지, 중간 체격의 록온 격투가",
   mage: "14세 동우 · 무테안경, 둥글고 넓은 체형, 흰옷의 야심!만만 메이지",
 };
 export function CharacterPreview({ team }: { team: "A" | "B" | Character }) {
