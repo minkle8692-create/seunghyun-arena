@@ -1,11 +1,21 @@
 // Authority for all combat. Integer centi-HP/energy and 1/256-pixel coordinates.
-export const VERSION = "arena-1.0.0",
+export const VERSION = "arena-1.1.0",
   Q = 256,
   W = 384 * Q,
   H = 512 * Q,
   R = 8 * Q,
   RANGE = 22 * Q,
   CAP = 5400;
+// Explicit B-only sweep: 0.4s wind-up, 4s cooldown, 24 energy, 32px/120°, 4 targets.
+export const KICK = {
+  windup: 12,
+  cooldown: 120,
+  cost: 2400,
+  range: 32 * Q,
+  limit: 4,
+  knockback: 10 * Q,
+} as const;
+export type Kick = { due: number; dx: number; dy: number };
 export type Stats = [number, number, number, number, number, number];
 export type Config = {
   A: { count: number; stats: Stats };
@@ -40,6 +50,8 @@ export type Unit = {
   last: number;
   serial: number;
   attack: Attack | null;
+  kick: Kick | null;
+  kickNext: number;
   kx: number;
   ky: number;
   rem: number;
@@ -177,6 +189,8 @@ export function createBattle(input: Config, seed: number): Battle {
         last: -30,
         serial: 0,
         attack: null,
+        kick: null,
+        kickNext: 0,
         kx: 0,
         ky: 0,
         rem: 0,
@@ -254,8 +268,29 @@ export function occluded(a: Unit, b: Unit, grid: Grid) {
   }
   return false;
 }
+export function kickTargets(u: Unit, kick: Kick, grid: Grid) {
+  const l = kick.dx ** 2 + kick.dy ** 2;
+  return grid
+    .near(u.x, u.y, KICK.range)
+    .filter((v) => {
+      if (v.hp <= 0 || v.team === u.team) return false;
+      const dx = v.x - u.x,
+        dy = v.y - u.y,
+        d = dx * dx + dy * dy;
+      const dot = dx * kick.dx + dy * kick.dy;
+      return (
+        d > 0 &&
+        d <= KICK.range ** 2 &&
+        dot > 0 &&
+        4 * dot * dot >= d * l &&
+        !occluded(u, v, grid)
+      );
+    })
+    .sort((a, b) => dist(u, a) - dist(u, b) || a.id - b.id)
+    .slice(0, KICK.limit);
+}
 function collision(live: Unit[]) {
-  for (let iter = 0; iter < 48; iter++) {
+  for (let iter = 0; iter < 96; iter++) {
     const grid = new Grid(live),
       delta = new Map<number, number[]>();
     for (const a of live)
@@ -320,7 +355,7 @@ export function step(s: Battle) {
     }
     let mx = 0,
       my = 0;
-    if (t && !u.attack && dist(u, t) > (19 * Q) ** 2) {
+    if (t && !u.attack && !u.kick && dist(u, t) > (19 * Q) ** 2) {
       let dx = t.x - u.x,
         dy = t.y - u.y;
       let blocked = false;
@@ -348,7 +383,7 @@ export function step(s: Battle) {
     moves.set(u.id, [mx + u.kx, my + u.ky]);
     u.kx = 0;
     u.ky = 0;
-    if (!u.attack && s.tick - u.last >= 30)
+    if (!u.attack && !u.kick && s.tick - u.last >= 30)
       u.energy = Math.min(u.maxEnergy, u.energy + 12 + 3 * u.stats[1]);
   }
   for (const u of live) {
@@ -360,12 +395,76 @@ export function step(s: Battle) {
   const post = new Grid(live);
   const hits = new Map<
     number,
-    { sum: number; x: number; y: number; ids: number[] }
+    { sum: number; x: number; y: number; ids: number[]; kick?: boolean }
   >();
   for (const u of live) {
     const t = byId.get(u.target);
     if (
+      u.team === "B" &&
       !u.attack &&
+      !u.kick &&
+      t &&
+      t.hp > 0 &&
+      s.tick >= u.next &&
+      s.tick >= u.kickNext &&
+      u.energy >= KICK.cost &&
+      dist(u, t) <= KICK.range ** 2 &&
+      !occluded(u, t, post)
+    ) {
+      u.kick = { due: s.tick + KICK.windup, dx: t.x - u.x, dy: t.y - u.y };
+      u.kickNext = s.tick + KICK.cooldown;
+      u.next = s.tick + KICK.windup + 12;
+      u.energy -= KICK.cost;
+      u.last = s.tick;
+      s.events.push({
+        tick: s.tick,
+        kind: "kick_windup",
+        actor: u.id,
+        target: t.id,
+      });
+    }
+    if (u.kick) {
+      u.last = s.tick;
+      if (s.tick >= u.kick.due) {
+        const victims = kickTargets(u, u.kick, post);
+        for (const v of victims) {
+          // Guaranteed contact inside the telegraphed arc; 80% normal base damage, no crit.
+          const amount = Math.floor(
+            damage(u.stats[3], v.stats[5], 100, false) * 0.8,
+          );
+          const h = hits.get(v.id) || { sum: 0, x: 0, y: 0, ids: [] };
+          const [x, y] = norm(v.x - u.x, v.y - u.y, KICK.knockback);
+          h.sum += amount;
+          h.x += x;
+          h.y += y;
+          h.ids.push(u.id);
+          h.kick = true;
+          hits.set(v.id, h);
+          v.flash = "hit";
+          v.flashUntil = s.tick + 10;
+          s.events.push({
+            tick: s.tick,
+            kind: "kick_hit",
+            actor: u.id,
+            target: v.id,
+            damage: amount,
+          });
+        }
+        u.kick = null;
+        u.flash = "kick";
+        u.flashUntil = s.tick + 10;
+        s.events.push({
+          tick: s.tick,
+          kind: "kick",
+          actor: u.id,
+          target: u.id,
+          actual: victims.length,
+        });
+      }
+    }
+    if (
+      !u.attack &&
+      !u.kick &&
       t &&
       t.hp > 0 &&
       s.tick >= u.next &&
@@ -440,7 +539,8 @@ export function step(s: Battle) {
       u.hp -= actual;
       s.counts.damage += actual;
       const len = isqrt(h.x * h.x + h.y * h.y);
-      [u.kx, u.ky] = len > 4 * Q ? norm(h.x, h.y, 4 * Q) : [h.x, h.y];
+      const cap = h.kick ? KICK.knockback : 4 * Q;
+      [u.kx, u.ky] = len > cap ? norm(h.x, h.y, cap) : [h.x, h.y];
       s.events.push({
         tick: s.tick,
         kind: "damage",
@@ -456,6 +556,7 @@ export function step(s: Battle) {
       u.flash = "ko";
       u.flashUntil = s.tick + 45;
       s.events.push({ tick: s.tick, kind: "ko", actor: -1, target: u.id });
+      u.kick = null;
       if (u.attack) {
         s.events.push({
           tick: s.tick,

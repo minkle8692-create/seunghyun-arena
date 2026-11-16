@@ -16,8 +16,8 @@ import { CharacterPreview } from "./characters";
 import { aggregate } from "./statistics";
 const labels = ["체력", "스태미너", "기술", "파워", "스피드", "방어"];
 const titles: Record<string, string> = {
-  A_win: "민트 팀 승리!",
-  B_win: "피치 팀 승리!",
+  A_win: "14세 승현 승리!",
+  B_win: "35세 승현 승리!",
   draw: "동시 KO · 무승부",
   timeout: "시간 종료 · 미결",
 };
@@ -174,7 +174,7 @@ function App() {
         <a className="brand" href="#">
           S<span>✦</span>S <small>PIXEL ARENA</small>
         </a>
-        <span className="version">LOCAL SIM · v1.0</span>
+        <span className="version">LOCAL SIM · v1.1</span>
       </header>
       <section className="intro">
         <div className="eyebrow">같은 이름, 다른 전성기</div>
@@ -190,7 +190,7 @@ function App() {
               <div className={`score ${t}`} key={t}>
                 <CharacterPreview team={t} />
                 <div>
-                  <b>{t === "A" ? "14세 · 안경 교복" : "35세 · 블랙 티"}</b>
+                  <b>{t === "A" ? "14세 승현" : "35세 승현"}</b>
                   <strong>
                     {view[t].alive}
                     <small> / {view.config[t].count}</small>
@@ -303,6 +303,9 @@ function App() {
                     {
                       (
                         {
+                          kick_windup: "35세 승현 · 돌려차기 예고",
+                          kick_hit: "돌려차기 명중 · 넉백",
+                          kick: "돌려차기 발동",
                           hit: "명중",
                           crit: "✦ 치명타",
                           dodge: "회피",
@@ -313,9 +316,11 @@ function App() {
                         } as Record<string, string>
                       )[e.kind]
                     }{" "}
-                    {e.actual !== undefined
-                      ? `−${e.actual / 100} (초과 ${e.overkill! / 100})`
-                      : e.reason || ""}
+                    {e.kind === "kick"
+                      ? `${e.actual}명 타격`
+                      : e.actual !== undefined
+                        ? `−${e.actual / 100} (초과 ${e.overkill! / 100})`
+                        : e.reason || ""}
                   </p>
                 ))
               ) : (
@@ -555,9 +560,22 @@ function App() {
         </aside>
       </div>
       <footer>
-        <b>작은 픽셀, 투명한 규칙.</b>
+        <section className="panel" data-testid="kick-rules">
+          <b>35세 승현 전용 · 킥복싱 돌려차기</b>
+          <p>
+            자동 발동 · 준비 0.4초 · 재사용 4초 · 스태미너 24 소모
+            <br />
+            전방 120° · 중심 거리 32px · 가까운 적 최대 4명 · 몸통 뒤 관통 없음
+            <br />
+            예고 범위에 남은 적에게 기본 평타 피해의 80% 확정 명중 · 치명타 없음
+            · 넉백 최대 10px
+            <br />
+            방향은 준비 시작 시 고정됩니다. 14세 승현은 평타만 사용합니다.
+          </p>
+        </section>
+        <b>큰 픽셀, 투명한 규칙.</b>
         <p>
-          양 팀 몸통·사거리 동일 · 숨은 나이 / 인원 보정 없음
+          양 팀 몸통·평타 사거리 동일 · 숨은 나이 / 인원 보정 없음
           <br />
           명중한 평타의 치명 확률 0.5% · 피해 1.5배 · 기술과 독립
           <br />

@@ -1,7 +1,7 @@
 import { useEffect, useRef, type MutableRefObject } from "react";
 import Phaser from "phaser";
 import { characters } from "./characters";
-import { Q, step, type Battle, type Event } from "./sim";
+import { Q, KICK, step, type Battle, type Event } from "./sim";
 export type Control = {
   state: Battle;
   paused: boolean;
@@ -17,6 +17,7 @@ export function Arena({ control }: { control: MutableRefObject<Control> }) {
     let game: Phaser.Game;
     class Scene extends Phaser.Scene {
       ink!: Phaser.GameObjects.Graphics;
+      effects!: Phaser.GameObjects.Graphics;
       actors = new Map<number, Phaser.GameObjects.Container>();
       debt = 0;
       lastState: Battle | null = null;
@@ -25,6 +26,7 @@ export function Arena({ control }: { control: MutableRefObject<Control> }) {
       stamp = 0;
       damageLabels = new Map<number, { until: number; amount: number }>();
       create() {
+        this.effects = this.add.graphics().setDepth(1000);
         this.ink = this.add.graphics();
         this.ink.fillStyle(0x24354a);
         this.ink.fillRect(0, 0, 384, 512);
@@ -93,15 +95,50 @@ export function Arena({ control }: { control: MutableRefObject<Control> }) {
           this.sample = 0;
           this.ticks = 0;
         }
+        this.effects.clear();
         for (const u of s.units) {
+          if (
+            u.hp > 0 &&
+            (u.kick || (u.flash === "kick" && s.tick <= u.flashUntil))
+          ) {
+            const angle = u.kick
+              ? Math.atan2(u.kick.dy, u.kick.dx)
+              : Math.atan2(
+                  (s.units.find((v) => v.id === u.target)?.y ?? u.y) - u.y,
+                  (s.units.find((v) => v.id === u.target)?.x ?? u.x) - u.x,
+                );
+            this.effects.lineStyle(
+              u.kick ? 2 : 4,
+              u.kick ? 0xffcf66 : 0xffffff,
+              0.85,
+            );
+            this.effects.beginPath();
+            this.effects.arc(
+              u.x / Q,
+              u.y / Q,
+              KICK.range / Q,
+              angle - Math.PI / 3,
+              angle + Math.PI / 3,
+            );
+            this.effects.strokePath();
+            if (u.kick) {
+              for (const edge of [angle - Math.PI / 3, angle + Math.PI / 3])
+                this.effects.lineBetween(
+                  u.x / Q,
+                  u.y / Q,
+                  u.x / Q + Math.cos(edge) * 32,
+                  u.y / Q + Math.sin(edge) * 32,
+                );
+            }
+          }
           let a = this.actors.get(u.id);
           if (!a) {
-            const sprite = this.add.image(0, -5, u.team);
+            const sprite = this.add.image(0, -8, u.team).setScale(1.4);
             const bar = this.add
-              .rectangle(-8, -22, 16, 2, 0x76efc7)
+              .rectangle(-10, -29, 20, 2, 0x76efc7)
               .setOrigin(0, 0.5);
             const text = this.add
-              .text(0, -34, "", {
+              .text(0, -40, "", {
                 fontSize: "10px",
                 fontFamily: "sans-serif",
                 color: "#fff1c0",
@@ -117,7 +154,7 @@ export function Arena({ control }: { control: MutableRefObject<Control> }) {
             text = a.list[2] as Phaser.GameObjects.Text;
           a.setPosition(Math.round(u.x / Q), Math.round(u.y / Q));
           a.setDepth(u.y / Q);
-          bar.width = (16 * u.hp) / u.maxHp;
+          bar.width = (20 * u.hp) / u.maxHp;
           const active = s.tick <= u.flashUntil;
           a.setVisible(u.hp > 0 || active);
           a.setAlpha(u.hp > 0 ? 1 : 0.35);
@@ -130,7 +167,7 @@ export function Arena({ control }: { control: MutableRefObject<Control> }) {
                   ? 15
                   : 0,
           );
-          sprite.setY(-5 + (u.flash === "walk" && s.tick % 8 < 4 ? -1 : 0));
+          sprite.setY(-8 + (u.flash === "walk" && s.tick % 8 < 4 ? -1 : 0));
           sprite.setTint(
             active && (u.flash === "hit" || u.flash === "crit")
               ? 0xffc9bc
@@ -143,6 +180,7 @@ export function Arena({ control }: { control: MutableRefObject<Control> }) {
               : active
                 ? (
                     {
+                      kick: "돌려차기!",
                       crit: "✦ 치명!",
                       dodge: "회피",
                       ko: "KO",
