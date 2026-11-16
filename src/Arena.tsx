@@ -228,6 +228,7 @@ export function Arena({ control }: { control: MutableRefObject<Control> }) {
           const sprite = a.list[0] as Phaser.GameObjects.Image,
             bar = a.list[1] as Phaser.GameObjects.Rectangle,
             text = a.list[2] as Phaser.GameObjects.Text;
+          if (sprite.texture.key !== u.character) sprite.setTexture(u.character);
           a.setPosition(Math.round(u.x / Q), Math.round(u.y / Q));
           const impact=this.impacts.get(u.id);
           const hitStop=!!impact && this.emotionClock<impact.freeze && !this.reduced.matches;
@@ -313,7 +314,7 @@ export function Arena({ control }: { control: MutableRefObject<Control> }) {
               this.effects.fillRect(x, y - 2, 1, 2);
             }
           }
-          rendered.push({ id:u.id, team:u.team, character:u.character, cast:!!u.cast, fleeing:u.fleeing, hitStop, hp:u.hp, crying, scale:sprite.scaleX,
+          rendered.push({ id:u.id, team:u.team, character:u.character, textureKey:sprite.texture.key, cast:!!u.cast, fleeing:u.fleeing, hitStop, hp:u.hp, crying, scale:sprite.scaleX,
             y:sprite.y, angle:sprite.angle, kickPhase, lockPhase, kneeSlap, fistVisible:fist.visible, fistX:fist.x, fistY:fist.y, fistAngle:fist.angle, scaleY:sprite.scaleY, legVisible:leg.visible, legAngle:leg.angle, x:a.x, worldY:a.y, recoilLeft:u.recoilLeft, drop:crying ? emotion.drop : null, visible:a.visible });
           const dmg = this.damageLabels.get(u.id);
           text.setText(
@@ -334,6 +335,10 @@ export function Arena({ control }: { control: MutableRefObject<Control> }) {
         }
         if (new URLSearchParams(location.search).has("diagnostics")) {
           host.current!.dataset.render = JSON.stringify(rendered);
+          host.current!.dataset.textures = JSON.stringify(Object.keys(characters).map(key => {
+            const color=this.textures.getPixel(5,16,key);
+            return {key, shirt:color?.color};
+          }));
           host.current!.dataset.speech = JSON.stringify(speech);
           host.current!.dataset.feedback=JSON.stringify({particles:this.sparks.length,shake,projectiles:s.projectiles.length,clock:this.emotionClock});
         }

@@ -361,13 +361,17 @@ function App() {
                 <label className="characterSelect">캐릭터
                   <select aria-label={`${t} 캐릭터`} value={characterOf(draft,t)} onChange={e => {
                     const character=e.target.value as Character;
-                    setDraft(d=>({...d,[t]:{...d[t],character,stats:[...(character==="mage"?MAGE_STATS:(character==="adult"||character==="seokho")?DEFAULT.B.stats:DEFAULT.A.stats)] as Stats}}));
+                    const next: Config = {...draft,[t]:{...draft[t],character,stats:[...(character==="mage"?MAGE_STATS:(character==="adult"||character==="seokho")?DEFAULT.B.stats:DEFAULT.A.stats)] as Stats}};
+                    setDraft(next);
+                    start(next, seed);
+                    control.current.paused = true;
+                    setPaused(true);
                   }}>
                     {(["youth","adult","mage","seokho"] as const).map(c=><option key={c} value={c}>{NAMES[c]}</option>)}
                   </select>
                 </label>
                 <CharacterPreview team={characterOf(draft,t)} />
-                <p className="hint">캐릭터 변경 시 해당 캐릭터 기본 스탯 복원 · 인원은 유지</p>
+                <p className="hint">캐릭터 변경 즉시 경기장에 반영 · 준비 상태로 초기화 · 기본 스탯 복원, 인원 유지</p>
                 <p data-testid={`effective-${t}`}>
                   {`${NAMES[characterOf(draft,t)]} ×${STAT_MULTIPLIERS[characterOf(draft,t)]}`} · 실제 적용 스탯<br />
                   {labels.map((label, i) => `${label} ${effectiveStats(characterOf(draft,t), draft[t].stats)[i]}`).join(" / ")}
