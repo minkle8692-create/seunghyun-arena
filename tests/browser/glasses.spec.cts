@@ -1,0 +1,22 @@
+import {test,expect} from '@playwright/test';
+import {writeFileSync} from 'node:fs';
+test('rimless mage glasses shared preview and actual arena desktop/mobile',async({page})=>{
+ const errors:string[]=[];page.on('pageerror',e=>errors.push(e.message));
+ await page.goto('/?diagnostics=1&appearance=rimless');
+ await page.getByLabel('A 캐릭터',{exact:true}).selectOption('mage');
+ await page.getByLabel('B 캐릭터',{exact:true}).selectOption('mage');
+ for(const t of ['A','B'])await page.getByLabel(`${t} 인원`,{exact:true}).fill('2');
+ await page.getByRole('button',{name:'이 설정으로 시작 · 같은 시드',exact:true}).click();
+ await page.getByRole('button',{name:'Ⅱ 일시정지',exact:true}).click();
+ await expect(page.locator('.scoreboard').getByRole('img',{name:/14세 동우 · 무테안경/})).toHaveCount(2);
+ await expect(page.locator('canvas')).toBeVisible();
+ await page.waitForTimeout(150);
+ const actors=JSON.parse((await page.locator('.arena').getAttribute('data-render'))!);
+ expect(actors.length).toBe(4);expect(actors.every((a:any)=>a.character==='mage'&&a.scale===1.05)).toBe(true);
+ await page.screenshot({path:'evidence/glasses/desktop.png',fullPage:true});
+ await page.locator('.arena').screenshot({path:'evidence/glasses/arena.png'});
+ await page.locator('.scoreboard').screenshot({path:'evidence/glasses/previews.png'});
+ await page.setViewportSize({width:390,height:844});await page.screenshot({path:'evidence/glasses/mobile.png',fullPage:true});
+ expect(await page.evaluate(()=>document.documentElement.scrollWidth<=innerWidth)).toBe(true);
+ expect(errors).toEqual([]);writeFileSync('evidence/glasses/appearance.json',JSON.stringify({actors,errors,desktop:[1280,1000],mobile:[390,844]},null,2));
+});

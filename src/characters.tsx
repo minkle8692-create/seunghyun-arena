@@ -39,12 +39,18 @@ export const characters: Record<Character, readonly PixelRect[]> = {
     [5,1,14,4,ink],[7,0,4,2,ink],[6,4,3,2,ink],
     [8,7,2,2,ink],[15,7,2,2,ink],[8,10,2,1,0xef9d91],[16,10,2,1,0xef9d91],
     [11,10,4,2,0xffffff],[10,14,5,3,0xb4a0f8],
+    // Rimless lenses: open skin-coloured centres, pale glints, thin bridge/temples.
+    [6,7,1,1,0x9aafb9],[19,7,1,1,0x9aafb9],
+    [7,6,4,1,0xd9f3fa],[14,6,4,1,0xd9f3fa],
+    [7,7,1,2,0xb8d4df],[17,7,1,2,0xb8d4df],
+    [8,9,3,1,0xc8e3eb],[14,9,3,1,0xc8e3eb],
+    [11,7,3,1,0x9aafb9],[8,6,1,1,0xffffff],[15,6,1,1,0xffffff],
   ],
 };
 export const descriptions = {
   youth: "14세 승현 · 삐죽 검은 머리, 네모 안경, 파란 깃 하늘색 반팔 교복",
   adult: "35세 승현 · 검은 머리, 검은 반팔 티셔츠, 넓은 어깨와 근육질 체형",
-  mage: "14세 동우 · 둥글고 넓은 체형, 흰옷의 야심!만만 메이지",
+  mage: "14세 동우 · 무테안경, 둥글고 넓은 체형, 흰옷의 야심!만만 메이지",
 };
 export function CharacterPreview({ team }: { team: "A" | "B" | Character }) {
   return <svg className={`characterPreview ${identity(team)}`} viewBox="0 0 26 26" role="img" aria-label={descriptions[identity(team)]} shapeRendering="crispEdges">
