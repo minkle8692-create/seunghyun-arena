@@ -561,3 +561,30 @@ footer small {
 
 .characterSelect { display:flex; align-items:center; gap:12px; flex-wrap:wrap; margin:12px 0; }
 .characterSelect select { background:#15283a; color:#fff; padding:10px; border:1px solid #527184; border-radius:8px; max-width:100%; font:inherit; }
+
+/* Opt-in cinematic presentation; the deterministic arena remains unchanged. */
+[hidden] { display: none !important; }
+.scenarioLaunch { display:flex; align-items:center; justify-content:space-between; gap:20px; margin-bottom:24px; background:linear-gradient(115deg,#203b45,#32283f); }
+.scenarioLaunch h2 { margin:8px 0; }
+.scenarioLaunch p,.scenarioHeading p { color:#bccbdd; font-size:13px; line-height:1.65; }
+.scenarioLayout { display:block; max-width:720px; margin:auto; }
+.scenarioHeading { text-align:center; padding:22px 12px; }
+.scenarioHeading h2 { font-size:clamp(21px,4vw,30px); }
+.scenarioHeading h2 span { color:#ffba89; padding:0 10px; }
+.scenarioIntro { position:absolute; inset:36px 0 0; z-index:5; display:flex; flex-direction:column; align-items:center; justify-content:center; padding:24px; text-align:center; background:linear-gradient(150deg,#152c3cf5,#301e39f5); }
+.scenarioIntro h2 { font-size:clamp(21px,4vw,30px); line-height:1.4; }
+.scenarioIntro p { max-width:380px; line-height:1.8; color:#e4e8f1; }
+.scenarioPortraits { display:flex; align-items:center; justify-content:center; gap:20px; }
+.scenarioPortraits svg { width:95px; height:95px; image-rendering:pixelated; animation:scenario-arrival .6s ease-out both; }
+.scenarioPortraits b { color:#ffba89; }
+.chapter-1 .scenarioPortraits svg:last-child,.chapter-2 .scenarioPortraits svg:first-child { opacity:.3; }
+.scenarioCaption { min-height:64px; padding:16px; text-align:center; font-size:15px; line-height:1.7; background:#1c263a; border:1px solid #425574; border-radius:12px; margin:14px 0; }
+.scenarioControls { flex-wrap:wrap; }
+@keyframes scenario-arrival { from { transform:translateY(16px); opacity:0; } to { transform:translateY(0); opacity:1; } }
+@media(max-width:600px) { .scenarioLaunch { flex-direction:column; align-items:stretch; } .scenarioIntro { padding:14px; } .scenarioPortraits svg { width:75px; height:75px; } }
+@media(prefers-reduced-motion:reduce) { .scenarioPortraits svg { animation:none; } }
+.showcase { width:100%; max-width:330px; }
+.showcase svg { width:100%; height:auto; }
+.scenarioIntro .scenarioPortraits svg { width:50px; height:50px; }
+.scenarioIntro h2 { margin:10px 0; }
+.scenarioIntro p { font-size:13px; margin:6px 0; }

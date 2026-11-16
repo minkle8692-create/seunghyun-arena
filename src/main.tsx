@@ -13,6 +13,8 @@ import {
 } from "./sim";
 import { readSaved, save } from "./storage";
 import "./style.css";
+import { ScenarioShowcase } from "./ScenarioShowcase";
+import { SCENARIO_SEED, SCENARIO_CHAPTERS, scenarioConfig, scenarioCaption } from "./scenario";
 import { CharacterPreview } from "./characters";
 import { aggregate } from "./statistics";
 const labels = ["체력", "스태미너", "기술", "파워", "스피드", "방어"];
@@ -39,6 +41,12 @@ function App() {
   const [draft, setDraft] = useState<Config>(
     initial.current.config || structuredClone(DEFAULT),
   );
+  const [scenario, setScenario] = useState(false);
+  const [chapter, setChapter] = useState(0);
+  const introElapsed = useRef(0);
+  const [introTime, setIntroTime] = useState(0);
+  const [reduced, setReduced] = useState(() => matchMedia("(prefers-reduced-motion: reduce)").matches);
+  const savedNormal = useRef<{ state: Control["state"]; seed: number; speed: number; paused: boolean; logs: Event[]; events: Event[]; actual: number } | null>(null);
   const [notice, setNotice] = useState(initial.current.error || "");
   const [seed, setSeed] = useState(20261116);
   const [speed, setSpeed] = useState(1);
@@ -72,7 +80,7 @@ function App() {
     }
   };
   control.current.speed = speed;
-  control.current.paused = paused;
+  control.current.paused = paused || (scenario && chapter < 3);
   control.current.hidden = hidden;
   useEffect(() => {
     const id = setTimeout(() => {
@@ -163,6 +171,57 @@ function App() {
       total: 100,
     });
   }
+  function scenarioBattle() {
+    control.current.state = createBattle(scenarioConfig(), SCENARIO_SEED);
+    control.current.actual = 0;
+    control.current.events = [];
+    seen.current = 0;
+    setView(summarize(control.current.state));
+    setLogs([]);
+    setSeed(SCENARIO_SEED);
+    setSpeed(0.5);
+    setPaused(false);
+    introElapsed.current = 0; setIntroTime(0);
+    setChapter(0);
+  }
+  function enterScenario() {
+    savedNormal.current = { state: control.current.state, seed, speed, paused, logs,
+      events: [...control.current.events], actual: control.current.actual };
+    setScenario(true);
+    scenarioBattle();
+  }
+  function leaveScenario() {
+    const old = savedNormal.current;
+    if (old) {
+      control.current.state = old.state;
+      control.current.events = old.events;
+      control.current.actual = old.actual;
+      seen.current = old.state.tick;
+      setView(summarize(old.state)); setSeed(old.seed); setSpeed(old.speed);
+      setPaused(old.paused); setLogs(old.logs);
+    }
+    setScenario(false); savedNormal.current = null;
+  }
+  useEffect(() => {
+    const media=matchMedia("(prefers-reduced-motion: reduce)");
+    const change=()=>setReduced(media.matches); media.addEventListener("change",change);
+    return ()=>media.removeEventListener("change",change);
+  }, []);
+  useEffect(() => {
+    if (!scenario || chapter >= 3 || paused || hidden) return;
+    let frame = 0, last = performance.now();
+    const animate = (now: number) => {
+      introElapsed.current += Math.min(now - last, 100); last = now;
+      setIntroTime(introElapsed.current);
+      if (introElapsed.current >= [2400,4200,7200][chapter]) {
+        introElapsed.current = 0; setIntroTime(0); setChapter(c => c + 1); return;
+      }
+      frame = requestAnimationFrame(animate);
+    };
+    frame = requestAnimationFrame(animate);
+    return () => cancelAnimationFrame(frame);
+  }, [scenario, chapter, paused, hidden]);
+  const cinematicEvent = logs.find(e => e.kind.startsWith("lock_") || e.kind.startsWith("kick"));
   const stats = aggregate(batch?.results || []);
   const n = stats.N;
   const resultCount = (o: string) =>
@@ -184,8 +243,19 @@ function App() {
         </h1>
         <p>수적 우위와 한 끗의 기술. 마지막까지 살아남는 팀은?</p>
       </section>
-      <div className="layout">
+      {!scenario && <section className="scenarioLaunch panel">
+        <div><div className="eyebrow">SPECIAL MATCH · 1 VS 1</div><h2>회전킥 VS 록온</h2>
+          <p>35세 승현과 25세 석호의 짧은 소개, 그리고 실제 결투. 기존 설정은 그대로 보관됩니다.</p></div>
+        <button className="primary" disabled={!!busy} onClick={enterScenario}>▶ 승현 VS 석호 시나리오</button>
+      </section>}
+      <div className={`layout ${scenario ? "scenarioLayout" : ""}`}>
+
         <section className="watch">
+          {scenario && <section className="scenarioHeading" data-testid="scenario-stage" data-chapter={chapter < 3 ? chapter : view.outcome ? "ending" : "battle"}>
+            <div className="eyebrow">SPECIAL MATCH · 회전킥 VS 록온</div>
+            <h2>35세 승현 <span>VS</span> 25세 석호</h2>
+            <p>1 대 1 · 원래 능력치 그대로 · 석호 최대 HP 425 · 승패 보정 없음</p>
+          </section>}
           <div className="scoreboard">
             {(["A", "B"] as const).map((t) => (
               <div className={`score ${t}`} key={t}>
@@ -207,15 +277,23 @@ function App() {
           <div className="arenaWrap">
             <div className="matchLabel">
               <span className="dot" />{" "}
-              {view.outcome ? "경기 종료" : paused ? "준비 / 일시정지" : "LIVE"}
+              {scenario && chapter < 3 ? "시나리오 · 기술 소개" : view.outcome ? "경기 종료" : paused ? "준비 / 일시정지" : "LIVE"}
               <b data-testid="time">
                 {(view.tick / 30).toFixed(1)} <small>/ 180s</small>
               </b>
             </div>
             <Arena control={control} />
+            {scenario && chapter < 3 && <div className={`scenarioIntro chapter-${chapter}`} data-testid="scenario-intro">
+              <div className="eyebrow">CHAPTER 0{chapter + 1}</div>
+              <div className="scenarioPortraits"><CharacterPreview team="adult" /><b>VS</b><CharacterPreview team="seokho" /></div>
+              <h2>{SCENARIO_CHAPTERS[chapter].title}</h2>
+              {chapter > 0 && <ScenarioShowcase chapter={chapter} elapsed={introTime} reduced={reduced} />}
+              <p>{SCENARIO_CHAPTERS[chapter].line}</p>
+              <small>소개 {chapter + 1} / 3 {paused ? "· 일시정지" : ""}</small>
+            </div>}
             {view.outcome && (
               <div className="result" role="status">
-                <span>ROUND FINISHED</span>
+                <span>{scenario ? "EPILOGUE · 결투의 끝" : "ROUND FINISHED"}</span>
                 <h2>{view.winner ? `${NAMES[characterOf(view.config,view.winner as "A" | "B")]} · ${view.winner}팀 승리!` : titles[view.outcome]}</h2>
                 <p>
                   {view.outcome === "timeout"
@@ -227,6 +305,20 @@ function App() {
               </div>
             )}
           </div>
+          {scenario && <>
+            <div className="scenarioCaption" data-testid="scenario-caption">
+              {chapter < 3 ? "소개 후 자동으로 전투가 시작됩니다" : view.outcome ?
+                (view.winner ? "남은 한 사람의 감격의 눈물. 다음 대결에서 다시 만나요." : "이번 결투에는 승자가 없습니다. 두 사람의 이야기는 계속됩니다.") : scenarioCaption(cinematicEvent?.kind)}
+            </div>
+            <div className="controls scenarioControls">
+              <button className="primary" onClick={() => setPaused(p => !p)}>{paused ? "시나리오 재개" : "시나리오 일시정지"}</button>
+              {chapter < 3 && <button onClick={() => { setChapter(3); introElapsed.current = 0; }}>소개 건너뛰기</button>}
+              <button onClick={scenarioBattle}>시나리오 다시보기</button>
+              <button onClick={leaveScenario}>일반 모드로 돌아가기</button>
+            </div>
+            <p className="hint">같은 시드로 다시보기 · 전투는 0.5× 슬로 관전 · 기술 소개는 피해 없는 연출이며 실제 전투에서 기술은 중단될 수 있습니다 · 소개와 전투 모두 일시정지 가능 · 일반 모드 복귀 시 이전 전투와 설정 복원</p>
+          </>}
+          <div hidden={scenario}>
           <div className="controls">
             <button
               className="primary"
@@ -273,6 +365,7 @@ function App() {
             <button disabled={!!busy} onClick={() => start(draft, newSeed())}>
               ✦ 새 시드 전투
             </button>
+          </div>
           </div>
           <div className="meta">
             SEED {seed} · 30Hz 고정 · 실효 {control.current.actual.toFixed(2)}×{" "}
@@ -340,7 +433,7 @@ function App() {
             </div>
           </details>
         </section>
-        <aside>
+        <aside hidden={scenario}>
           <details className="panel setup" open>
             <summary>
               전투 실험실 <span>설정 초안</span>
