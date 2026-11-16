@@ -59,3 +59,6 @@ Hit feedback is renderer-only: bright flash,45ms visual position hold, bounded12
 - Verification artifacts are retained privately and are not bundled with the static site.
 
 Append `?diagnostics=1` to enable the read-only engine/Worker test factory on `window.arenaDiagnostics`. It has no credentials or filesystem access. Normal pages do not load this helper.
+
+## Seokho (arena-2.1.0)
+Selectable on either team. Base stats multiply by2.5 exactly; no adult kick/speed bonus. Lock120px, telegraph1s/two knee-slaps, dash120px/s capped1s with body/wall collision; left then right0.3s apart at22px actual range. First landed signature hit crit1.5; later hit normal0.5percent crit. Recovery prone1.5s (alive, vulnerable, no movement/attacks), cooldown7s/cost30. Target KO cancels. Defaults and mage glasses/large speech bubble preserved.

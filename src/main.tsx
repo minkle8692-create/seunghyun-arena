@@ -175,10 +175,10 @@ function App() {
         <a className="brand" href="#">
           S<span>✦</span>S <small>PIXEL ARENA</small>
         </a>
-        <span className="version">LOCAL SIM · v2.0</span>
+        <span className="version">LOCAL SIM · v2.1</span>
       </header>
       <section className="intro">
-        <div className="eyebrow">세 캐릭터, 각자의 전투 방식</div>
+        <div className="eyebrow">네 캐릭터, 각자의 전투 방식</div>
         <h1>
           승현 <span>VS</span> 승현
         </h1>

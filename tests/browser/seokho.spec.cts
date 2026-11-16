@@ -39,6 +39,7 @@ for(const side of ['A','B'])test('Seokho visible full sequence '+side,async({pag
  writeFileSync(dir+'/'+side+'-sequence.json',JSON.stringify({events,frames},null,2));
 });
 test('Seokho mirror mixed Worker100 parity and crowd200',async({page})=>{
+ await page.setViewportSize({width:390,height:844});
  await page.goto('/?diagnostics=1');await page.waitForFunction(()=>!!(window as any).arenaDiagnostics);
  const evidence=await page.evaluate(async()=>{
  const d=(window as any).arenaDiagnostics;
@@ -50,4 +51,24 @@ test('Seokho mirror mixed Worker100 parity and crowd200',async({page})=>{
  return{trials:rows.length,ticks,stress,results:rows.map(({hashes,...r}:any)=>r)};});
  writeFileSync(dir+'/worker-stress.json',JSON.stringify(evidence,null,2));
  expect(evidence.trials).toBe(100);expect(evidence.stress.every(s=>s.overlap<0.5)).toBe(true);
+});
+test('Seokho mirror selection, mobile victory tears and preserved settings',async({page})=>{
+ await page.setViewportSize({width:390,height:844});
+ await page.goto('/?diagnostics=1');
+ for(const t of ['A','B']){await page.getByLabel(t+' 캐릭터',{exact:true}).selectOption('seokho');await page.getByLabel(t+' 인원',{exact:true}).fill('1');}
+ await expect(page.getByTestId('effective-A')).toContainText('17.5');
+ await expect(page.getByTestId('effective-B')).toContainText('17.5');
+ await page.getByLabel('B 캐릭터',{exact:true}).selectOption('youth');
+ for(const label of ['체력','스태미너','기술','파워','스피드','방어'])await page.getByLabel('B '+label,{exact:true}).fill('1');
+ await page.getByRole('button',{name:'4×',exact:true}).click();
+ await page.getByRole('button',{name:'이 설정으로 시작 · 같은 시드',exact:true}).click();
+ await page.waitForFunction(()=>(window as any).arenaDiagnostics?.snapshot().outcome==='A_win');
+ const actors=JSON.parse((await page.locator('.arena').getAttribute('data-render'))!);
+ expect(actors.some((a:any)=>a.character==='seokho'&&a.hp>0&&a.crying)).toBe(true);
+ expect(actors.every((a:any)=>!a.crying||a.hp>0&&a.team==='A')).toBe(true);
+ expect(JSON.parse((await page.locator('.arena').getAttribute('data-speech'))||'[]')).toEqual([]);
+ await page.screenshot({path:dir+'/victory-mobile.png',fullPage:true});
+ writeFileSync(dir+'/victory.json',JSON.stringify(actors,null,2));
+ await page.reload();await expect(page.getByLabel('A 캐릭터',{exact:true})).toHaveValue('seokho');
+ await expect(page.getByTestId('effective-A')).toContainText('17.5');
 });
