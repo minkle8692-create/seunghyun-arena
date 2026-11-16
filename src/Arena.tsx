@@ -138,23 +138,25 @@ export function Arena({ control }: { control: MutableRefObject<Control> }) {
         for(const u of s.units) {
           const phrase=u.cast?"야심!만만":u.lock?.phase==="lock"?"자신있게 맞아줄게":u.lock?.phase==="prone"?"내가 잘못했어 ㅠㅠ":"";
           if(s.outcome || u.hp<=0 || !phrase || speech.length>=6) continue;
+          const scale=u.cast?1/3:1;
           const half=u.cast?66:102;
-          const x=Math.max(half+4,Math.min(380-half,u.x/Q));
-          const preferred=u.y/Q-61;
+          const visualHalf=half*scale;
+          const x=Math.max(visualHalf+4,Math.min(380-visualHalf,u.x/Q));
+          const preferred=u.y/Q-(u.cast?34:61);
           const candidates=[preferred,preferred-48,preferred+48,preferred-96];
-          const y=candidates.map(v=>Math.max(26,Math.min(486,v))).find(v=>speech.every(b=>Math.abs(b.x-x)>=b.width/2+half+6 || Math.abs(b.y-v)>=46));
+          const y=candidates.map(v=>Math.max(26,Math.min(486,v))).find(v=>speech.every(b=>Math.abs(b.x-x)>=b.width/2+visualHalf+6 || Math.abs(b.y-v)>=b.height/2+20*scale+6));
           if(y===undefined) continue;
-          const bubble=this.bubbles[speech.length]; bubble.setPosition(x,y).setVisible(true);
+          const bubble=this.bubbles[speech.length]; bubble.setPosition(x,y).setScale(scale).setVisible(true);
           (bubble.list[1] as Phaser.GameObjects.Text).setText(phrase).setFontSize(u.cast?20:18);
           const g=bubble.list[0] as Phaser.GameObjects.Graphics;
-          const tipX=Math.max(-57,Math.min(57,u.x/Q-x));
+          const tipX=Math.max(-57,Math.min(57,(u.x/Q-x)/scale));
           const bottom=y<u.y/Q; const edge=bottom?20:-20; const tip=bottom?29:-29;
           g.clear().fillStyle(0x111b2b,0.25).fillRoundedRect(-half+2,-17,half*2,40,11);
           g.fillStyle(0xfffdf0).lineStyle(2,0x182235);
           g.fillTriangle(tipX-7,edge,tipX+7,edge,tipX,tip);
           g.strokeTriangle(tipX-7,edge,tipX+7,edge,tipX,tip);
           g.fillRoundedRect(-half,-20,half*2,40,10);g.strokeRoundedRect(-half,-20,half*2,40,10);
-          speech.push({id:u.id,x,y,width:half*2,height:40,phrase});
+          speech.push({id:u.id,x,y,width:visualHalf*2,height:40*scale,phrase});
         }
         const rendered: object[] = [];
         for (const u of s.units) {
