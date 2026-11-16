@@ -1,6 +1,6 @@
 // Authority for all combat. Integer centi-HP and 1/256-pixel coordinates.
 // Exact half-stat inputs may regenerate half-cent energy (binary-exact .5), never truncated.
-export const VERSION = "arena-2.1.1",
+export const VERSION = "arena-2.1.2",
   Q = 256,
   W = 384 * Q,
   H = 512 * Q,
@@ -538,18 +538,18 @@ export function step(s: Battle) {
           seq.phase="dash";seq.due=s.tick+LOCK.dashTicks;
           s.events.push({tick:s.tick,kind:"lock_dash",actor:u.id,target:seq.target});
         } else if(seq.phase==="dash" && (s.tick>=seq.due || (target && dist(u,target)<=RANGE**2))) {
-          seq.phase="left";seq.due=s.tick+6;
+          seq.phase="right";seq.due=s.tick+6;
         } else if((seq.phase==="left"||seq.phase==="right") && s.tick>=seq.due) {
           const side=seq.phase;
           const ev:Event={tick:s.tick,kind:"lock_"+side,actor:u.id,target:seq.target,
-            attack:{target:seq.target,due:s.tick,serial:seq.serial*2+(side==="right"?1:0),hit:roll(u,1000),damage:95+roll(u,11),crit:roll(u,1000)}};
+            attack:{target:seq.target,due:s.tick,serial:seq.serial*2+(side==="left"?1:0),hit:roll(u,1000),damage:95+roll(u,11),crit:roll(u,1000)}};
           const a=ev.attack!;
           if(!target || target.hp<=0)ev.reason="target_KO";
           else if(dist(u,target)>RANGE**2)ev.reason="range";
           else if(occluded(u,target,post))ev.reason="occluded";
           else if(a.hit>=hitThreshold(u.stats[2],target.stats[2]))ev.reason="miss";
           else {
-            const crit=!seq.landed || a.crit<5;
+            const crit=side==="right" || a.crit<5;
             ev.reason=crit?"critical":"normal";seq.landed=true;
             ev.damage=damage(u.stats[3],target.stats[5],a.damage,crit);
             const h=hits.get(target.id)||{sum:0,x:0,y:0,ids:[]};
@@ -558,7 +558,7 @@ export function step(s: Battle) {
             target.flash=crit?"crit":"hit";target.flashUntil=s.tick+8;
           }
           s.events.push(ev);
-          if(side==="left"){seq.phase="right";seq.due=s.tick+LOCK.gap;}
+          if(side==="right"){seq.phase="left";seq.due=s.tick+LOCK.gap;}
           else {seq.phase="prone";seq.due=s.tick+LOCK.recovery;
             s.events.push({tick:s.tick,kind:"lock_prone",actor:u.id,target:seq.target});}
         } else if(seq.phase==="prone" && s.tick>=seq.due) {
