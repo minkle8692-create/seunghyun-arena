@@ -17,6 +17,7 @@ it('ordered lock dash left right prone; distinct IDs, first landed crit only; re
  const left=seq[2],right=seq[3];expect(left.reason).toBe('critical');expect(right.reason).toBe('normal');
  expect(left.attack!.serial).not.toBe(right.attack!.serial);
  expect(left.damage).toBe(damage(20,10,left.attack!.damage,true));
+ expect(s.counts.lockHit).toBe(2);expect(s.counts.lockCrit).toBe(1);expect(s.counts.hit).toBe(0);
  const position=[a.x,a.y],hp=a.hp,until=a.lock!.due;
  while(s.tick<until-1){step(s);expect([a.x,a.y]).toEqual(position);expect(a.hp).toBe(hp);expect(a.attack).toBeNull();}
  expect(a.hp).toBeGreaterThan(0);step(s);expect(a.lock).toBeNull();

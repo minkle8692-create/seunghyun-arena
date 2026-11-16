@@ -1,6 +1,6 @@
 // Authority for all combat. Integer centi-HP and 1/256-pixel coordinates.
 // Exact half-stat inputs may regenerate half-cent energy (binary-exact .5), never truncated.
-export const VERSION = "arena-2.1.0",
+export const VERSION = "arena-2.1.1",
   Q = 256,
   W = 384 * Q,
   H = 512 * Q,
@@ -131,6 +131,8 @@ export type Battle = {
     canceled: number;
     ko: number;
     damage: number;
+    lockHit: number;
+    lockCrit: number;
     spellCast: number;
     spellHit: number;
   };
@@ -278,7 +280,7 @@ export function createBattle(input: Config, seed: number): Battle {
       invalid: 0,
       canceled: 0,
       ko: 0,
-      damage: 0, spellCast: 0, spellHit: 0,
+      damage: 0, lockHit: 0, lockCrit: 0, spellCast: 0, spellHit: 0,
     },
   };
 }
@@ -552,7 +554,7 @@ export function step(s: Battle) {
             ev.damage=damage(u.stats[3],target.stats[5],a.damage,crit);
             const h=hits.get(target.id)||{sum:0,x:0,y:0,ids:[]};
             h.sum+=ev.damage;h.ids.push(u.id);hits.set(target.id,h);
-            s.counts.hit++;if(crit)s.counts.crit++;
+            s.counts.lockHit++;if(crit)s.counts.lockCrit++;
             target.flash=crit?"crit":"hit";target.flashUntil=s.tick+8;
           }
           s.events.push(ev);

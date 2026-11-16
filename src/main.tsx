@@ -286,6 +286,9 @@ function App() {
               마법 명중 <b>{view.counts.spellHit}</b> · 회피 <b>{view.counts.dodge}</b>
             </span>
             <span>
+              록온 명중 <b>{view.counts.lockHit}</b> · 치명 <b>{view.counts.lockCrit}</b>
+            </span>
+            <span>
               KO <b>{view.counts.ko}</b>
             </span>
             <span>
