@@ -1,5 +1,5 @@
 // Authority for all combat. Integer centi-HP/energy and 1/256-pixel coordinates.
-export const VERSION = "arena-1.2.0",
+export const VERSION = "arena-1.3.0",
   Q = 256,
   W = 384 * Q,
   H = 512 * Q,
@@ -26,6 +26,18 @@ export const DEFAULT: Config = {
   B: { count: 1, stats: [7, 7, 9, 8, 6, 3] },
 };
 export type Team = "A" | "B";
+export const STAT_MULTIPLIERS = { A: 1, B: 5 } as const;
+// Config and persistence always contain BASE stats. Apply exactly once at spawn.
+export function effectiveStats(team: Team, base: Stats): Stats {
+  return base.map(n => n * STAT_MULTIPLIERS[team]) as Stats;
+}
+// Preserve original 1..10 curves; extended inputs remain positive and bounded.
+export const defenseFactor = (defense: number) => defense <= 10
+  ? 1000 - 35 * defense : Math.floor(65000 / (100 + 7 * (defense - 10)));
+export const attackDelay = (speed: number, fatigue: number) => Math.max(6, Math.ceil(
+  (speed <= 10 ? 42 - 2 * speed : 220 / speed) * 1000 /
+  (650 + Math.floor(350 * Math.max(0, Math.min(1000, fatigue)) / 1000))
+));
 export type Attack = {
   target: number;
   due: number;
@@ -150,12 +162,12 @@ export function damage(
   crit: boolean,
 ) {
   return Math.floor(
-    ((700 + 300 * power) * (1000 - 35 * defense) * j * (crit ? 3 : 2) +
+    ((700 + 300 * power) * defenseFactor(defense) * j * (crit ? 3 : 2) +
       100000) /
       200000,
   );
 }
-export const hitThreshold = (a: number, b: number) => 500 + 40 * (a - b);
+export const hitThreshold = (a: number, b: number) => clamp(500 + 40 * (a - b), 50, 950);
 export function createBattle(input: Config, seed: number): Battle {
   const config = canonical(input);
   Object.freeze(config.A.stats);
@@ -165,7 +177,8 @@ export function createBattle(input: Config, seed: number): Battle {
   Object.freeze(config);
   const units: Unit[] = [];
   for (const team of ["A", "B"] as const) {
-    const { count, stats } = config[team];
+    const { count } = config[team];
+    const stats = Object.freeze(effectiveStats(team, config[team].stats)) as Stats;
     const cols = Math.min(10, count);
     const rows = Math.ceil(count / cols);
     for (let i = 0; i < count; i++) {
@@ -206,6 +219,7 @@ export function createBattle(input: Config, seed: number): Battle {
       JSON.stringify({
         config,
         VERSION,
+        statMultipliers: STAT_MULTIPLIERS,
         rng: "lcg32-reject-v1",
         spawn: 1,
         crit: [5, 1000, 3, 2],
@@ -467,9 +481,7 @@ export function step(s: Battle) {
       const f = Math.min(1000, Math.floor((u.energy * 4000) / u.maxEnergy));
       u.next =
         s.tick +
-        Math.ceil(
-          ((42 - 2 * u.stats[4]) * 1000) / (650 + Math.floor((350 * f) / 1000)),
-        );
+        attackDelay(u.stats[4], f);
       u.energy -= 800;
       u.last = s.tick;
       u.attack = {
@@ -586,7 +598,9 @@ export function summarize(s: Battle) {
   return {
     simVersion: VERSION,
     configSchemaVersion: 1,
-    resultSchemaVersion: 1,
+    resultSchemaVersion: 2,
+    statMultipliers: { ...STAT_MULTIPLIERS },
+    effectiveStats: { A: effectiveStats("A", s.config.A.stats), B: effectiveStats("B", s.config.B.stats) },
     rngVersion: "lcg32-reject-v1",
     spawnVersion: 1,
     mapVersion: "empty-384x512-v1",

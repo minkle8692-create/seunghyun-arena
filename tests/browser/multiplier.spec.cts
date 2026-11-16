@@ -1,0 +1,23 @@
+import { test, expect } from '@playwright/test';
+import { writeFileSync } from 'node:fs';
+test('adult x5 visible effective inputs, saved base migration and live engine coefficients',async({page})=>{
+ await page.addInitScript(()=>localStorage.setItem('arena.draft',JSON.stringify({schema:1,config:{A:{count:50,stats:[10,10,4,6,8,8]},B:{count:1,stats:[7,7,9,8,6,3]}}})));
+ await page.goto('/?diagnostics=1');
+ await expect(page.getByTestId('effective-B')).toContainText('체력 35 / 스태미너 35 / 기술 45 / 파워 40 / 스피드 30 / 방어 15');
+ await expect(page.getByTestId('multiplier-rules')).toContainText('최소 6틱');
+ await expect(page.getByLabel('B 체력',{exact:true})).toHaveValue('7');
+ await page.waitForFunction(()=>!!(window as any).arenaDiagnostics);
+ const before=await page.evaluate(()=>{const d=(window as any).arenaDiagnostics,s=d.snapshot();return {version:d.VERSION,base:s.config,effective:s.units.at(-1).stats,summary:d.summarize(s),hp:s.units.at(-1).maxHp,energy:s.units.at(-1).maxEnergy};});
+ expect(before.version).toBe('arena-1.3.0');expect(before.effective).toEqual([35,35,45,40,30,15]);expect(before.hp).toBe(37000);expect(before.energy).toBe(29000);
+ await page.getByLabel('B 체력',{exact:true}).fill('10');
+ await expect(page.getByTestId('effective-B')).toContainText('체력 50');
+ await page.getByRole('button',{name:'이 설정으로 시작 · 같은 시드',exact:true}).click();
+ await page.getByRole('button',{name:'Ⅱ 일시정지',exact:true}).click();
+ const after=await page.evaluate(()=>{const s=(window as any).arenaDiagnostics.snapshot();return {base:s.config.B.stats,effective:s.units.at(-1).stats,hp:s.units.at(-1).maxHp};});
+ expect(after.base[0]).toBe(10);expect(after.effective[0]).toBe(50);expect(after.hp).toBe(50500);
+ await page.screenshot({path:'evidence/multiplier-inputs-desktop.png',fullPage:true});
+ await page.setViewportSize({width:390,height:844});
+ expect(await page.evaluate(()=>document.documentElement.scrollWidth<=innerWidth)).toBe(true);
+ await page.screenshot({path:'evidence/multiplier-inputs-mobile.png',fullPage:true});
+ writeFileSync('evidence/multiplier-inputs.json',JSON.stringify({before,after},null,2));
+});

@@ -25,6 +25,7 @@ const duel: Config = {
 function ready(crit = 5, hit = 0) {
   const s = createBattle(duel, 0);
   const [a, b] = s.units;
+  b.stats = [...a.stats];
   a.x = 180 * Q;
   b.x = 200 * Q;
   a.y = b.y = 250 * Q;

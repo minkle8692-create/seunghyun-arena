@@ -3,6 +3,7 @@ import { createRoot } from "react-dom/client";
 import { Arena, type Control } from "./Arena";
 import {
   DEFAULT,
+  effectiveStats,
   VERSION,
   createBattle,
   summarize,
@@ -174,7 +175,7 @@ function App() {
         <a className="brand" href="#">
           S<span>✦</span>S <small>PIXEL ARENA</small>
         </a>
-        <span className="version">LOCAL SIM · v1.1</span>
+        <span className="version">LOCAL SIM · v1.3</span>
       </header>
       <section className="intro">
         <div className="eyebrow">같은 이름, 다른 전성기</div>
@@ -352,7 +353,11 @@ function App() {
                 <p>
                   {t === "A"
                     ? "작고 민첩한 몸, 묵직한 팔힘. 높은 지속력과 내구성."
-                    : "벌크업한 파워와 무술 숙련. 부상·에이징으로 낮은 내구성."}
+                    : "명시적 강화: 기본 스탯 6종 ×5. 아래는 기본값이며 실제 적용값은 별도 표시합니다."}
+                </p>
+                <p data-testid={`effective-${t}`}>
+                  {t === "B" ? "35세 승현 ×5" : "14세 승현 ×1"} · 실제 적용 스탯<br />
+                  {labels.map((label, i) => `${label} ${effectiveStats(t, draft[t].stats)[i]}`).join(" / ")}
                 </p>
                 <label className="count">
                   인원{" "}
@@ -409,7 +414,7 @@ function App() {
               <b>
                 {draft.A.count} vs {draft.B.count}
               </b>{" "}
-              · HP {55 + 9 * draft.A.stats[0]} / {55 + 9 * draft.B.stats[0]}
+              · HP {55 + 9 * draft.A.stats[0]} / {55 + 9 * effectiveStats("B", draft.B.stats)[0]}
             </div>
             <button
               className="primary wide"
@@ -565,6 +570,14 @@ function App() {
         </aside>
       </div>
       <footer>
+        <section className="panel" data-testid="multiplier-rules">
+          <b>35세 승현 · 모든 기본 스탯 ×5</b>
+          <p>인원은 그대로, 체력·스태미너·기술·파워·스피드·방어 입력만 5배로 계산합니다.
+          슬라이더와 저장값은 기본 1~10, 실제 적용값은 5~50입니다. 최종 HP·피해를 다시 5배 하지 않습니다.</p>
+          <p>HP = 55 + 9×체력 · 에너지 = 45 + 7×스태미너 · 이동속도 = 42 + 4×스피드 px/s (피로 시 감소).
+          평타 명중률은 기술 차이에 따라 5~95%. 방어 10 초과 피해계수는 650/(100+7×(방어−10)),
+          평타 간격은 스피드 10 초과 시 220/스피드 틱 (피로 반영·최소 6틱). 회전킥 비용·쿨다운은 그대로입니다.</p>
+        </section>
         <section className="panel" data-testid="kick-rules">
           <b>35세 승현 전용 · 킥복싱 돌려차기</b>
           <p>
