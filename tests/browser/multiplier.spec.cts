@@ -8,7 +8,7 @@ test('adult x5 visible effective inputs, saved base migration and live engine co
  await expect(page.getByLabel('B 체력',{exact:true})).toHaveValue('7');
  await page.waitForFunction(()=>!!(window as any).arenaDiagnostics);
  const before=await page.evaluate(()=>{const d=(window as any).arenaDiagnostics,s=d.snapshot();return {version:d.VERSION,base:s.config,effective:s.units.at(-1).stats,summary:d.summarize(s),hp:s.units.at(-1).maxHp,energy:s.units.at(-1).maxEnergy};});
- expect(before.version).toBe('arena-1.4.0');expect(before.effective).toEqual([35,35,45,40,30,15]);expect(before.hp).toBe(37000);expect(before.energy).toBe(29000);
+ expect(before.version).toBe('arena-2.0.0');expect(before.effective).toEqual([35,35,45,40,30,15]);expect(before.hp).toBe(37000);expect(before.energy).toBe(29000);
  await page.getByLabel('B 체력',{exact:true}).fill('10');
  await expect(page.getByTestId('effective-B')).toContainText('체력 50');
  await page.getByRole('button',{name:'이 설정으로 시작 · 같은 시드',exact:true}).click();

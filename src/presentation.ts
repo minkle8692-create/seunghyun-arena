@@ -1,5 +1,5 @@
-import type { Battle } from './sim';
-export const actorScale = (team: 'A' | 'B') => team === 'A' ? 1.05 : 1.4;
+import { identity, type Character, type Battle } from './sim';
+export const actorScale = (team: 'A' | 'B' | Character) => identity(team) === 'adult' ? 1.4 : 1.05;
 export function cries(outcome: Battle['outcome'], team: 'A' | 'B', hp: number) {
   return hp > 0 && outcome === `${team}_win`;
 }

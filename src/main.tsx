@@ -2,7 +2,7 @@ import React, { useEffect, useRef, useState } from "react";
 import { createRoot } from "react-dom/client";
 import { Arena, type Control } from "./Arena";
 import {
-  DEFAULT,
+  DEFAULT, NAMES, characterOf, MAGE_STATS, type Character,
   effectiveStats,
   VERSION,
   createBattle,
@@ -17,8 +17,8 @@ import { CharacterPreview } from "./characters";
 import { aggregate } from "./statistics";
 const labels = ["체력", "스태미너", "기술", "파워", "스피드", "방어"];
 const titles: Record<string, string> = {
-  A_win: "14세 승현 승리!",
-  B_win: "35세 승현 승리!",
+  A_win: "A팀 승리!",
+  B_win: "B팀 승리!",
   draw: "동시 KO · 무승부",
   timeout: "시간 종료 · 미결",
 };
@@ -175,10 +175,10 @@ function App() {
         <a className="brand" href="#">
           S<span>✦</span>S <small>PIXEL ARENA</small>
         </a>
-        <span className="version">LOCAL SIM · v1.4</span>
+        <span className="version">LOCAL SIM · v2.0</span>
       </header>
       <section className="intro">
-        <div className="eyebrow">같은 이름, 다른 전성기</div>
+        <div className="eyebrow">세 캐릭터, 각자의 전투 방식</div>
         <h1>
           승현 <span>VS</span> 승현
         </h1>
@@ -189,9 +189,9 @@ function App() {
           <div className="scoreboard">
             {(["A", "B"] as const).map((t) => (
               <div className={`score ${t}`} key={t}>
-                <CharacterPreview team={t} />
+                <CharacterPreview team={characterOf(view.config,t)} />
                 <div>
-                  <b>{t === "A" ? "14세 승현" : "35세 승현"}</b>
+                  <b>{NAMES[characterOf(view.config,t)]}</b>
                   <strong>
                     {view[t].alive}
                     <small> / {view.config[t].count}</small>
@@ -216,7 +216,7 @@ function App() {
             {view.outcome && (
               <div className="result" role="status">
                 <span>ROUND FINISHED</span>
-                <h2>{titles[view.outcome]}</h2>
+                <h2>{view.winner ? `${NAMES[characterOf(view.config,view.winner as "A" | "B")]} · ${view.winner}팀 승리!` : titles[view.outcome]}</h2>
                 <p>
                   {view.outcome === "timeout"
                     ? "양 팀 생존 · HP로 승자를 정하지 않습니다."
@@ -280,10 +280,10 @@ function App() {
           </div>
           <div className="metrics">
             <span>
-              명중 <b>{view.counts.hit}</b>
+              평타 명중 <b>{view.counts.hit}</b>
             </span>
             <span>
-              회피 <b>{view.counts.dodge}</b>
+              마법 명중 <b>{view.counts.spellHit}</b> · 회피 <b>{view.counts.dodge}</b>
             </span>
             <span>
               KO <b>{view.counts.ko}</b>
@@ -309,6 +309,7 @@ function App() {
                     {
                       (
                         {
+                          spell_cast: "야심!만만 · 시전", spell_release: "마법 발사", spell_hit: "마법 명중", spell_block: "몸통에 마법 소멸",
                           kick_windup: "35세 승현 · 돌려차기 예고",
                           kick_hit: "돌려차기 명중 · 넉백",
                           kick: "돌려차기 발동",
@@ -347,17 +348,25 @@ function App() {
               <section className={`teamConfig ${t}`} key={t}>
                 <h3>
                   <span>{t === "A" ? "◆" : "✦"}</span>{" "}
-                  {t === "A" ? "14세 승현" : "35세 승현"}{" "}
+                  {NAMES[characterOf(draft,t)]}{" "}
                   <small>TEAM {t}</small>
                 </h3>
                 <p>
-                  {t === "A"
-                    ? "작고 민첩한 몸, 묵직한 팔힘. 높은 지속력과 내구성."
-                    : "명시적 강화: 기본 스탯 6종 ×5. 아래는 기본값이며 실제 적용값은 별도 표시합니다."}
+                  {characterOf(draft,t) === "mage" ? "흰옷의 둥근 메이지. 가까우면 도주 → 멈춰서 야심!만만 → 다시 이동." : characterOf(draft,t) === "youth" ? "작고 민첩한 몸. 평타 피해 ×1.3." : "기본 6스탯 ×5, 평타 공속 ×1.5, 회전킥."}
                 </p>
+                <label className="characterSelect">캐릭터
+                  <select aria-label={`${t} 캐릭터`} value={characterOf(draft,t)} onChange={e => {
+                    const character=e.target.value as Character;
+                    setDraft(d=>({...d,[t]:{...d[t],character,stats:[...(character==="mage"?MAGE_STATS:character==="adult"?DEFAULT.B.stats:DEFAULT.A.stats)] as Stats}}));
+                  }}>
+                    {(["youth","adult","mage"] as const).map(c=><option key={c} value={c}>{NAMES[c]}</option>)}
+                  </select>
+                </label>
+                <CharacterPreview team={characterOf(draft,t)} />
+                <p className="hint">캐릭터 변경 시 해당 캐릭터 기본 스탯 복원 · 인원은 유지</p>
                 <p data-testid={`effective-${t}`}>
-                  {t === "B" ? "35세 승현 ×5" : "14세 승현 ×1"} · 실제 적용 스탯<br />
-                  {labels.map((label, i) => `${label} ${effectiveStats(t, draft[t].stats)[i]}`).join(" / ")}
+                  {`${NAMES[characterOf(draft,t)]} ×${characterOf(draft,t)==="adult"?5:1}`} · 실제 적용 스탯<br />
+                  {labels.map((label, i) => `${label} ${effectiveStats(characterOf(draft,t), draft[t].stats)[i]}`).join(" / ")}
                 </p>
                 <label className="count">
                   인원{" "}
@@ -414,7 +423,7 @@ function App() {
               <b>
                 {draft.A.count} vs {draft.B.count}
               </b>{" "}
-              · HP {55 + 9 * draft.A.stats[0]} / {55 + 9 * effectiveStats("B", draft.B.stats)[0]}
+              · HP {55 + 9 * effectiveStats(characterOf(draft,"A"), draft.A.stats)[0]} / {55 + 9 * effectiveStats(characterOf(draft,"B"), draft.B.stats)[0]}
             </div>
             <button
               className="primary wide"
@@ -536,7 +545,7 @@ function App() {
                     ? "산출 불가"
                     : `${(stats.critRate * 100).toFixed(2)}% (${stats.crits}/${stats.hits} 명중)`}
                   <br />
-                  명중률 (유효 대결만):{" "}
+                  평타 명중률 (유효 대결만):{" "}
                   {stats.hitRate === null
                     ? "산출 불가"
                     : `${(stats.hitRate * 100).toFixed(1)}%`}
@@ -570,6 +579,16 @@ function App() {
         </aside>
       </div>
       <footer>
+        <section className="panel" data-testid="mage-rules">
+          <b>14세 동우 · 메이지 · 야심!만만</b>
+          <p>기본 스탯 7 / 8 / 8 / 6 / 6 / 5 (체력·스태미너·기술·파워·스피드·방어). 팀과 무관하게 보정 ×1.
+          적이 76px 안으로 오면 도주, 108px 밖에서 도주 해제. 계속 쫓기면 최소 0.6초 도주 후 제자리 반격 시전. 사거리 150px 안에 가려지지 않은 적이 있으면 이동을 멈추고 0.8초 시전합니다.
+          재사용 2.5초 (시전 시작 기준) · 에너지 18 · 발사 후 회복 0.4초. 밀집 충돌로 밀리는 경우 외에는 시전 중 이동하지 않습니다.</p>
+          <p>투사체 속도 210px/s · 발사 순간 조준 방향으로 직진, 최대 150px. 첫 생존 몸통(아군 포함)에 소멸하며 적일 때만 피해, 벽 관통 없음.
+          마법 피해 = 파워·적 방어 기반 평타 기초 피해 × (1 + 0.03×기술), 센티HP 내림 · 접촉 시 확정 명중, 치명타 없음.
+          체력은 HP, 스태미너는 에너지·회복, 스피드는 이동속도에 적용됩니다. 성인 ×5·청소년 평타 ×1.3은 동우에게 적용되지 않습니다.</p>
+          <p>강화 효과는 팀 색상이 아닌 선택 캐릭터에 적용됩니다. 타격 섬광·짧은 시각적 멈춤·입자·약한 화면 흔들림은 연출 전용이며 계산 속도에 영향을 주지 않습니다. 동작 줄이기는 화면 흔들림·회전·반동을 억제합니다.</p>
+        </section>
         <section className="panel" data-testid="multiplier-rules">
           <b>35세 승현 · 모든 기본 스탯 ×5</b>
           <p>인원은 그대로, 체력·스태미너·기술·파워·스피드·방어 입력만 5배로 계산합니다.

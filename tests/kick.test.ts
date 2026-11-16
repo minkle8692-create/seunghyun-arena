@@ -35,7 +35,7 @@ function fixture() {
   });
   return { s, b };
 }
-describe("explicit B-only kick", () => {
+describe("explicit adult-only kick", () => {
   it("telegraphs, pays once, strikes multiple enemies and applies stronger bounded knockback", () => {
     const { s, b } = fixture();
     const energy = b.energy;
@@ -92,7 +92,7 @@ describe("explicit B-only kick", () => {
     );
     expect(kickTargets(b, k, new Grid([b, ...many]))).toHaveLength(6);
   });
-  it("respects insufficient stamina, cooldown and team restriction", () => {
+  it("respects insufficient stamina, cooldown and character restriction", () => {
     for (const mode of ["energy", "cooldown", "team"]) {
       const { s, b } = fixture();
       if (mode === "energy") {
@@ -100,7 +100,7 @@ describe("explicit B-only kick", () => {
         b.last = 0;
       }
       if (mode === "cooldown") b.kickNext = 100;
-      if (mode === "team") b.team = "A";
+      if (mode === "team") b.character = "youth";
       step(s);
       expect(b.kick).toBeNull();
       expect(s.events.some((e) => e.kind === "kick_windup")).toBe(false);

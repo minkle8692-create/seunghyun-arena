@@ -557,4 +557,7 @@ footer small {
 .score { position: relative; }
 .characterPreview { width: 48px; height: 52px; float: right; margin: 0 0 4px 6px; image-rendering: pixelated; }
 
-.score.A .characterPreview { width: 36px; height: 39px; }
+.characterPreview.youth, .characterPreview.mage { width: 36px; height: 39px; }
+
+.characterSelect { display:flex; align-items:center; gap:12px; flex-wrap:wrap; margin:12px 0; }
+.characterSelect select { background:#15283a; color:#fff; padding:10px; border:1px solid #527184; border-radius:8px; max-width:100%; font:inherit; }

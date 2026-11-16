@@ -1,4 +1,4 @@
-# 승현 VS 승현 — Pixel Arena
+# 승현 아레나 — Pixel Arena
 
 Original, non-bloody pixel auto-battler. React 19 + Vite + TypeScript + Phaser **3.90**, one authoritative pure TS engine shared by the renderer and a module Worker. No server, account, analytics, paid API, remote art or runtime network dependencies.
 
@@ -16,7 +16,7 @@ PLAYWRIGHT_BROWSERS_PATH="$PWD/.playwright-browsers" npx playwright install chro
 PLAYWRIGHT_BROWSERS_PATH="$PWD/.playwright-browsers" NO_PROXY=localhost,127.0.0.1 npm run test:e2e
 ```
 
-Static output: `dist/`. Hosting/build instructions only; this implementation does not deploy or publish. Parent owns GitHub/Render. `npm run build` and output directory `dist` suffice for a static host. There are no required secrets or environment variables.
+Static output: `dist/`. Live game: https://seunghyun-arena.onrender.com . `npm run build` and output directory `dist` suffice for a static host. There are no required secrets or environment variables.
 
 ## Play
 
@@ -26,17 +26,27 @@ Win = opponent eliminated and own survivors. Both eliminated on the same tick = 
 
 Batch uses the current draft and the displayed seed as master seed, pauses viewing, then executes 100 fresh trials sequentially in a real Worker. Pause/resume ACK occurs at completed-tick boundaries; cancel retains finished rows and classifies the interrupted row separately. Every row includes full config, seed, rules version, state hash, outcome/reason, counters, pending attacks, alive/HP totals. Export JSON to retain results. No batch reload recovery. Percentages use wins + draw + timeout; zero denominator is unavailable, not 0%.
 
-## Rules (arena-1.4.0)
+## Rules (arena-2.0.0)
 
 - Fixed30Hz deterministic shared TS simulation/Worker, body radius8px, simultaneous damage/KO; surviving team only wins. Timeout is unresolved.
-- Base sliders1..10, A input multiplier1/B multiplier5, once at spawn. Default B effective35/35/45/40/30/15. No hidden age bonuses.
+- Base sliders1..10, youth/mage input multiplier1, adult multiplier5, once at spawn. Default B effective35/35/45/40/30/15. No hidden age bonuses.
 - HP55+9H, energy45+7E; power, skill, movement, recovery and defense all consume effective inputs. Hit probability clamped5..95%; normal landed crit fixed0.5%, damage1.5x.
-- A normal damage = floor((rounded base centiHP damage*13+5)/10). Power unchanged. B normal delay = ceil(base delay*2/3), min4ticks, windup4ticks. Base delay includes fatigue, uses42-2S up to10 and220/S above10 (min6). No extra multiplier on derived stats.
+- Youth normal damage = floor((rounded base centiHP damage*13+5)/10). Power unchanged. Adult normal delay = ceil(base delay*2/3), min4ticks, windup4ticks. Base delay includes fatigue, uses42-2S up to10 and220/S above10 (min6). No extra multiplier on derived stats.
 - Extended defense multiplier is floor(65000/(100+7*(D-10)))/1000 above10, otherwise1-.035D. All damage positive. Full formula in sim.ts.
-- B radial kick:360degrees,44px center range, six closest unoccluded enemies, preparation12ticks/cooldown120/cost24;80% base normal damage, no critical. Bodies block attack lines.
+- Adult radial kick:360degrees,44px center range, six closest unoccluded enemies, preparation12ticks/cooldown120/cost24;80% base normal damage, no critical. Bodies block attack lines.
 - Kick recoil target44px over12ticks (0.4s), plus6ticks recovery. AI movement/attacks disabled for18ticks, pending future attacks interrupted AFTER simultaneous resolution. Walls clamp, crowded-body separation can reduce/redirect movement; never claim44px net through walls/crowds. Normal hits do not overwrite an active kick recoil. Ordinary knockback capped4px.
--96-iteration Jacobi body separation with spatial partition, fixed-point movement. Same seed/config/rules reproduce results; version1.4 changes previous outcomes. Export schema3 includes explicit combat modifiers and effective inputs; stored schema1 remains base stats.
-- A visual1.05/B1.4, actual rotating body/extended-leg kick, survivor-winner tears. Reduced motion removes spin/bob; pause/reset cleans presentation. Visual scale never changes collision radius.
+- Adaptive up-to256-iteration Jacobi body separation (early exit below1/32px) with spatial partition, fixed-point movement. Same seed/config/rules reproduce results; version2 changes prior state hashes. Export schema4 includes explicit combat modifiers/effective inputs; stored schema2 adds character identity. Old schema1 maps A to youth and B to adult, preserving base inputs.
+- Youth and mage visual1.05/adult1.4, actual rotating body/extended-leg kick, survivor-winner tears. Reduced motion removes spin/bob; pause/reset cleans presentation. Visual scale never changes collision radius.
+
+## Selectable characters and mage
+
+Each team selects **14세 승현**, **35세 승현**, or **14세 동우**. Selection changes default stats but not count; press apply to start the new configuration. Buffs belong to characters, never team slots. Mirror teams use mint/coral foot rings and health bars. Same two-faction survivor rules, no third faction.
+
+14세 동우 is an original white-clothed round mage, youth-height. Defaults `[7,8,8,6,6,5]`, multiplier1. Within76px flee, beyond108px stop fleeing (hysteresis). If continuously chased, flee18ticks before attempting a countercast. Clear target within150px: stop for24ticks and say **야심!만만**, cost18energy, cooldown75ticks from start,12tick stationary recovery. Body collisions may physically push a stationary caster. Fleeing follows walls tangentially; bodies/walls remain solid.
+
+Bolt:210px/s fixed direction aimed at release, travel limit150px. Swept first-body collision absorbs the bolt; allies block without damage. No homing, wall bypass, or penetration. Enemy contact damage = floor(base power/defense damage × (1+.03skill)), no critical. All six base stats affect HP/energy/recovery/power/skill/movement/defense through the shared engine. Magic hit counters are separate from normal attack crit/hit rates.
+
+Hit feedback is renderer-only: bright flash,45ms visual position hold, bounded120particles/180ms, capped1.5px/90ms camera shake. Fixed30Hz engine never pauses for visual hit-stop. Reduced motion disables shake/hold/spin; pause freezes the visual clock and reset clears it. Winner-only crying includes the mage.
 
 ## Structure
 
@@ -46,6 +56,6 @@ Batch uses the current draft and the displayed seed as master seed, pauses viewi
 - `src/statistics.ts`, `src/storage.ts`: denominator rules and defensive persistence.
 - `src/main.tsx`, `src/style.css`: Korean responsive controls and original art presentation.
 - `tests/`: invariant tests and real production-browser integration.
-- `evidence/`, `REPORT.md`: measured results and exact validation limits.
+- Verification artifacts are retained privately and are not bundled with the static site.
 
 Append `?diagnostics=1` to enable the read-only engine/Worker test factory on `window.arenaDiagnostics`. It has no credentials or filesystem access. Normal pages do not load this helper.

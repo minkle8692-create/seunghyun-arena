@@ -1,0 +1,21 @@
+import {test,expect} from '@playwright/test';
+import {writeFileSync,readFileSync} from 'node:fs';
+test('mobile selected mage battle controls and actual UI Worker100 export',async({page,browser})=>{
+ await page.setViewportSize({width:390,height:844});const errors:string[]=[];page.on('pageerror',e=>errors.push(e.message));
+ await page.goto('/?diagnostics=1');
+ await page.getByLabel('A 캐릭터',{exact:true}).selectOption('mage');await page.getByLabel('B 캐릭터',{exact:true}).selectOption('youth');
+ for(const t of ['A','B'])await page.getByLabel(`${t} 인원`,{exact:true}).fill('1');
+ await page.getByRole('button',{name:'이 설정으로 시작 · 같은 시드',exact:true}).click();await page.waitForTimeout(500);
+ await page.getByRole('button',{name:'Ⅱ 일시정지',exact:true}).click();const paused=await page.getByTestId('time').textContent();await page.waitForTimeout(180);expect(await page.getByTestId('time').textContent()).toBe(paused);
+ await page.getByRole('button',{name:'4×',exact:true}).click();await page.getByRole('button',{name:'▶ 전투 시작 / 재개',exact:true}).click();
+ await page.waitForFunction(()=>!!(window as any).arenaDiagnostics?.snapshot().outcome,{},{timeout:60000});
+ await page.screenshot({path:'evidence/mobile-mage-battle.png',fullPage:true});
+ await page.getByRole('button',{name:'100회 실험 시작',exact:true}).click();
+ await expect(page.getByTestId('batch-status')).toContainText('100/100 · 완료',{timeout:120000});
+ const waiting=page.waitForEvent('download');await page.getByRole('button',{name:'회차별 결과 JSON 저장',exact:true}).click();await(await waiting).saveAs('evidence/mobile-mage-batch100.json');
+ const saved=JSON.parse(readFileSync('evidence/mobile-mage-batch100.json','utf8'));
+ expect(saved.results).toHaveLength(100);expect(saved.results.every((r:any)=>r.config.A.character==='mage'&&r.config.B.character==='youth'&&r.statMultipliers.A===1&&r.statMultipliers.B===1)).toBe(true);
+ expect(await page.evaluate(()=>document.documentElement.scrollWidth<=innerWidth)).toBe(true);expect(errors).toEqual([]);
+ await page.screenshot({path:'evidence/mobile-mage-batch.png',fullPage:true});
+ writeFileSync('evidence/mobile-mage-controls.json',JSON.stringify({url:page.url(),browser:browser.version(),viewport:{width:390,height:844},physicalDevice:false,paused,statistics:saved.statistics,errors},null,2));
+});

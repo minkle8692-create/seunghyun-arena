@@ -2,7 +2,7 @@ import { useEffect, useRef, type MutableRefObject } from "react";
 import Phaser from "phaser";
 import { actorScale, cries, sobFrame } from "./presentation";
 import { characters } from "./characters";
-import { Q, KICK, step, type Battle, type Event } from "./sim";
+import { Q, KICK, MAGE, step, type Battle, type Event } from "./sim";
 export type Control = {
   state: Battle;
   paused: boolean;
@@ -27,6 +27,9 @@ export function Arena({ control }: { control: MutableRefObject<Control> }) {
       stamp = 0;
       emotionClock = 0;
       reduced = window.matchMedia("(prefers-reduced-motion: reduce)");
+      impacts = new Map<number, {until:number; freeze:number; x:number; y:number}>();
+      sparks: {x:number;y:number;born:number;angle:number}[] = [];
+      shakeUntil = 0;
       damageLabels = new Map<number, { until: number; amount: number }>();
       create() {
         this.effects = this.add.graphics().setDepth(1000);
@@ -48,13 +51,13 @@ export function Arena({ control }: { control: MutableRefObject<Control> }) {
           })
           .setOrigin(0.5)
           .setAlpha(0.15);
-        for (const team of ["A", "B"] as const) {
+        for (const team of ["youth", "adult", "mage"] as const) {
           const g = this.make.graphics({ x: 0, y: 0 });
           for (const [x, y, w, h, color] of characters[team]) {
             g.fillStyle(color);
             g.fillRect(x, y, w, h);
           }
-          g.generateTexture(team, 24, 26);
+          g.generateTexture(team, 26, 26);
           g.destroy();
         }
       }
@@ -65,6 +68,7 @@ export function Arena({ control }: { control: MutableRefObject<Control> }) {
           for (const a of this.actors.values()) a.destroy();
           this.actors.clear();
           this.damageLabels.clear();
+          this.impacts.clear(); this.sparks=[]; this.shakeUntil=0; this.cameras.main.setScroll(0,0);
           this.lastState = s;
           this.debt = 0;
           this.emotionClock = 0;
@@ -78,12 +82,17 @@ export function Arena({ control }: { control: MutableRefObject<Control> }) {
           let n = 0;
           while (this.debt >= 1000 / 30 && n < 12) {
             step(s);
-            for (const e of s.events)
-              if (e.kind === "damage")
-                this.damageLabels.set(e.target, {
-                  until: s.tick + 10,
-                  amount: e.actual || 0,
-                });
+            for (const e of s.events) {
+              if (e.kind === "damage") {
+                this.damageLabels.set(e.target, { until:s.tick+10, amount:e.actual||0 });
+                const target=s.units[e.target];
+                const a=this.actors.get(e.target);
+                this.impacts.set(e.target,{until:this.emotionClock+170,freeze:this.emotionClock+45,x:a?.x??target.x/Q,y:a?.y??target.y/Q});
+                if(!this.reduced.matches) this.shakeUntil=this.emotionClock+90;
+                for(let i=0;i<4;i++) this.sparks.push({x:target.x/Q,y:target.y/Q,born:this.emotionClock,angle:i*Math.PI/2+e.target});
+                if(this.sparks.length>120) this.sparks.splice(0,this.sparks.length-120);
+              }
+            }
             c.events.push(...s.events);
             if (c.events.length > 200)
               c.events.splice(0, c.events.length - 200);
@@ -101,8 +110,33 @@ export function Arena({ control }: { control: MutableRefObject<Control> }) {
         }
         if (!c.paused && !c.hidden) this.emotionClock += Math.min(delta, 100);
         this.effects.clear();
+        const shake=!this.reduced.matches && this.emotionClock<this.shakeUntil ? Math.sin(this.emotionClock*0.15)*1.5 : 0;
+        this.cameras.main.setScroll(shake, -shake*0.5);
+        this.sparks=this.sparks.filter(p=>this.emotionClock-p.born<180);
+        for(const p of this.sparks) {
+          const age=this.emotionClock-p.born;
+          const radius=this.reduced.matches?3:age*0.055;
+          this.effects.fillStyle(0xffecab,1-age/180);
+          this.effects.fillRect(p.x+Math.cos(p.angle)*radius,p.y+Math.sin(p.angle)*radius,2,2);
+        }
+        for(const bolt of s.projectiles) {
+          this.effects.lineStyle(3,0xc4a0ff,0.75);
+          this.effects.lineBetween(bolt.x/Q-bolt.vx/Q,bolt.y/Q-bolt.vy/Q,bolt.x/Q,bolt.y/Q);
+          this.effects.fillStyle(0xffffff);this.effects.fillCircle(bolt.x/Q,bolt.y/Q,3);
+          this.effects.lineStyle(1,0x9aeaff);this.effects.strokeCircle(bolt.x/Q,bolt.y/Q,5);
+        }
         const rendered: object[] = [];
         for (const u of s.units) {
+          if(u.hp>0) {
+            this.effects.lineStyle(1.5,u.team==="A"?0x76efc7:0xff9b82,0.8);
+            this.effects.strokeEllipse(u.x/Q,u.y/Q+8,17,7);
+          }
+          if(u.cast && u.hp>0) {
+            const p=1-(u.cast.due-s.tick)/MAGE.windup;
+            this.effects.lineStyle(2,0xc4a0ff,0.9);
+            this.effects.strokeCircle(u.x/Q,u.y/Q,12+8*p);
+            this.effects.fillStyle(0xe8ddff,0.5); this.effects.fillCircle(u.x/Q,u.y/Q-29,2+3*p);
+          }
           if (
             u.hp > 0 &&
             (u.kick || (u.kickPoseUntil > 0 && s.tick <= u.kickPoseUntil))
@@ -125,9 +159,9 @@ export function Arena({ control }: { control: MutableRefObject<Control> }) {
           }
           let a = this.actors.get(u.id);
           if (!a) {
-            const sprite = this.add.image(0, -8, u.team).setScale(actorScale(u.team));
+            const sprite = this.add.image(0, -8, u.character).setScale(actorScale(u.character));
             const bar = this.add
-              .rectangle(-10, -29, 20, 2, 0x76efc7)
+              .rectangle(-10, -29, 20, 2, u.team==="A"?0x76efc7:0xff9b82)
               .setOrigin(0, 0.5);
             const text = this.add
               .text(0, -40, "", {
@@ -150,6 +184,9 @@ export function Arena({ control }: { control: MutableRefObject<Control> }) {
             bar = a.list[1] as Phaser.GameObjects.Rectangle,
             text = a.list[2] as Phaser.GameObjects.Text;
           a.setPosition(Math.round(u.x / Q), Math.round(u.y / Q));
+          const impact=this.impacts.get(u.id);
+          const hitStop=!!impact && this.emotionClock<impact.freeze && !this.reduced.matches;
+          if(hitStop) a.setPosition(impact!.x,impact!.y);
           a.setDepth(u.y / Q);
           bar.width = (20 * u.hp) / u.maxHp;
           const active = s.tick <= u.flashUntil;
@@ -170,6 +207,7 @@ export function Arena({ control }: { control: MutableRefObject<Control> }) {
               ? 0xffc9bc
               : 0xffffff,
           );
+          if(impact && this.emotionClock<impact.until && u.hp>0 && !s.outcome) sprite.setTintFill(0xfff5db);
           const leg = a.list[3] as Phaser.GameObjects.Graphics;
           leg.setVisible(false);
           const spinTick = s.tick + (c.paused || c.hidden ? 0 : this.debt / (1000 / 30));
@@ -192,7 +230,7 @@ export function Arena({ control }: { control: MutableRefObject<Control> }) {
           if (crying) {
             sprite.setAngle(emotion.angle).setY(-8 + emotion.bob).clearTint();
             // Bright pixel tears below both eyes; presentation-only, no engine writes.
-            const scale = actorScale(u.team);
+            const scale = actorScale(u.character);
             this.effects.fillStyle(0x83eaff, 1);
             for (const side of [-1, 1]) {
               const x = a.x + side * 5 * scale;
@@ -201,11 +239,11 @@ export function Arena({ control }: { control: MutableRefObject<Control> }) {
               this.effects.fillRect(x, y - 2, 1, 2);
             }
           }
-          rendered.push({ id:u.id, team:u.team, hp:u.hp, crying, scale:sprite.scaleX,
+          rendered.push({ id:u.id, team:u.team, character:u.character, cast:!!u.cast, fleeing:u.fleeing, hitStop, hp:u.hp, crying, scale:sprite.scaleX,
             y:sprite.y, angle:sprite.angle, kickPhase, legVisible:leg.visible, legAngle:leg.angle, x:a.x, worldY:a.y, recoilLeft:u.recoilLeft, drop:crying ? emotion.drop : null, visible:a.visible });
           const dmg = this.damageLabels.get(u.id);
           text.setText(
-            crying ? "훌쩍…" : dmg && dmg.until >= s.tick
+            crying ? "훌쩍…" : u.cast ? "야심!만만" : dmg && dmg.until >= s.tick
               ? `${u.flash === "crit" ? "✦ " : ""}−${(dmg.amount / 100).toFixed(1)}`
               : active
                 ? (
@@ -222,6 +260,7 @@ export function Arena({ control }: { control: MutableRefObject<Control> }) {
         }
         if (new URLSearchParams(location.search).has("diagnostics")) {
           host.current!.dataset.render = JSON.stringify(rendered);
+          host.current!.dataset.feedback=JSON.stringify({particles:this.sparks.length,shake,projectiles:s.projectiles.length,clock:this.emotionClock});
         }
         if (time - this.stamp > 100) {
           this.stamp = time;
