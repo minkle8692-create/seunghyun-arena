@@ -1,5 +1,6 @@
 import { useEffect, useRef, type MutableRefObject } from "react";
 import Phaser from "phaser";
+import { actorScale, cries, sobFrame } from "./presentation";
 import { characters } from "./characters";
 import { Q, KICK, step, type Battle, type Event } from "./sim";
 export type Control = {
@@ -24,6 +25,8 @@ export function Arena({ control }: { control: MutableRefObject<Control> }) {
       sample = 0;
       ticks = 0;
       stamp = 0;
+      emotionClock = 0;
+      reduced = window.matchMedia("(prefers-reduced-motion: reduce)");
       damageLabels = new Map<number, { until: number; amount: number }>();
       create() {
         this.effects = this.add.graphics().setDepth(1000);
@@ -64,6 +67,7 @@ export function Arena({ control }: { control: MutableRefObject<Control> }) {
           this.damageLabels.clear();
           this.lastState = s;
           this.debt = 0;
+          this.emotionClock = 0;
           this.sample = 0;
           this.ticks = 0;
         }
@@ -95,7 +99,9 @@ export function Arena({ control }: { control: MutableRefObject<Control> }) {
           this.sample = 0;
           this.ticks = 0;
         }
+        if (!c.paused && !c.hidden) this.emotionClock += Math.min(delta, 100);
         this.effects.clear();
+        const rendered: object[] = [];
         for (const u of s.units) {
           if (
             u.hp > 0 &&
@@ -119,7 +125,7 @@ export function Arena({ control }: { control: MutableRefObject<Control> }) {
           }
           let a = this.actors.get(u.id);
           if (!a) {
-            const sprite = this.add.image(0, -8, u.team).setScale(1.4);
+            const sprite = this.add.image(0, -8, u.team).setScale(actorScale(u.team));
             const bar = this.add
               .rectangle(-10, -29, 20, 2, 0x76efc7)
               .setOrigin(0, 0.5);
@@ -159,9 +165,25 @@ export function Arena({ control }: { control: MutableRefObject<Control> }) {
               ? 0xffc9bc
               : 0xffffff,
           );
+          const crying = cries(s.outcome, u.team, u.hp);
+          const emotion = sobFrame(this.emotionClock, u.id, this.reduced.matches);
+          if (crying) {
+            sprite.setAngle(emotion.angle).setY(-8 + emotion.bob).clearTint();
+            // Bright pixel tears below both eyes; presentation-only, no engine writes.
+            const scale = actorScale(u.team);
+            this.effects.fillStyle(0x83eaff, 1);
+            for (const side of [-1, 1]) {
+              const x = a.x + side * 5 * scale;
+              const y = a.y - 12 * scale + emotion.bob + emotion.drop;
+              this.effects.fillRect(x - 1, y, 3, 5);
+              this.effects.fillRect(x, y - 2, 1, 2);
+            }
+          }
+          rendered.push({ id:u.id, team:u.team, hp:u.hp, crying, scale:sprite.scaleX,
+            y:sprite.y, angle:sprite.angle, drop:crying ? emotion.drop : null, visible:a.visible });
           const dmg = this.damageLabels.get(u.id);
           text.setText(
-            dmg && dmg.until >= s.tick
+            crying ? "훌쩍…" : dmg && dmg.until >= s.tick
               ? `${u.flash === "crit" ? "✦ " : ""}−${(dmg.amount / 100).toFixed(1)}`
               : active
                 ? (
@@ -175,6 +197,9 @@ export function Arena({ control }: { control: MutableRefObject<Control> }) {
                   )[u.flash] || ""
                 : "",
           );
+        }
+        if (new URLSearchParams(location.search).has("diagnostics")) {
+          host.current!.dataset.render = JSON.stringify(rendered);
         }
         if (time - this.stamp > 100) {
           this.stamp = time;

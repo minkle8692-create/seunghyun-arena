@@ -221,7 +221,7 @@ function App() {
                     ? "양 팀 생존 · HP로 승자를 정하지 않습니다."
                     : view.outcome === "draw"
                       ? "동일 tick에 양 팀 모두 KO됐습니다."
-                      : "상대 전원 KO + 우리 팀 생존"}
+                      : "상대 전원 KO + 우리 팀 생존 · 승자들의 감격의 눈물!"}
                 </p>
               </div>
             )}
@@ -245,6 +245,11 @@ function App() {
                   ? "▶ 전투 시작 / 재개"
                   : "Ⅱ 일시정지"}
             </button>
+            {(view.outcome === "A_win" || view.outcome === "B_win") && (
+              <button onClick={() => { control.current.paused = !paused; setPaused(!paused); }}>
+                {paused ? "눈물 모션 재개" : "눈물 모션 일시정지"}
+              </button>
+            )}
             <div className="speeds">
               {[1, 2, 4].map((v) => (
                 <button

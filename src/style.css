@@ -461,13 +461,13 @@ input[type="range"] {
 }
 .result {
   position: absolute;
-  top: 40%;
+  top: 2%;
   left: 5%;
   right: 5%;
   background: #121e31ed;
   border: 1px solid #a2efd5;
   border-radius: 18px;
-  padding: 25px 15px;
+  padding: 10px 15px;
   text-align: center;
   box-shadow: 0 10px 50px #0006;
 }
@@ -556,3 +556,5 @@ footer small {
 /* The preview and arena use exactly the same original pixel rectangles. */
 .score { position: relative; }
 .characterPreview { width: 48px; height: 52px; float: right; margin: 0 0 4px 6px; image-rendering: pixelated; }
+
+.score.A .characterPreview { width: 36px; height: 39px; }
