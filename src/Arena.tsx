@@ -2,7 +2,7 @@ import { useEffect, useRef, type MutableRefObject } from "react";
 import Phaser from "phaser";
 import { actorScale, cries, sobFrame } from "./presentation";
 import { characters } from "./characters";
-import { Q, KICK, MAGE, step, type Battle, type Event } from "./sim";
+import { Q, KICK, MAGE, LOCK, step, type Battle, type Event } from "./sim";
 export type Control = {
   state: Battle;
   paused: boolean;
@@ -57,7 +57,7 @@ export function Arena({ control }: { control: MutableRefObject<Control> }) {
           })
           .setOrigin(0.5)
           .setAlpha(0.15);
-        for (const team of ["youth", "adult", "mage"] as const) {
+        for (const team of ["youth", "adult", "mage", "seokho"] as const) {
           const g = this.make.graphics({ x: 0, y: 0 });
           for (const [x, y, w, h, color] of characters[team]) {
             g.fillStyle(color);
@@ -134,30 +134,42 @@ export function Arena({ control }: { control: MutableRefObject<Control> }) {
         // Presentation-only pool: six readable, non-overlapping bubbles at most.
         // Stable actor order supplies deterministic visual priority in crowded casts.
         this.bubbles.forEach(b=>b.setVisible(false));
-        const speech: {id:number;x:number;y:number;width:number;height:number}[]=[];
+        const speech: {id:number;x:number;y:number;width:number;height:number;phrase:string}[]=[];
         for(const u of s.units) {
-          if(s.outcome || u.hp<=0 || !u.cast || speech.length>=6) continue;
-          const x=Math.max(70,Math.min(314,u.x/Q));
+          const phrase=u.cast?"야심!만만":u.lock?.phase==="lock"?"자신있게 맞아줄게":u.lock?.phase==="prone"?"내가 잘못했어 ㅠㅠ":"";
+          if(s.outcome || u.hp<=0 || !phrase || speech.length>=6) continue;
+          const half=u.cast?66:102;
+          const x=Math.max(half+4,Math.min(380-half,u.x/Q));
           const preferred=u.y/Q-61;
           const candidates=[preferred,preferred-48,preferred+48,preferred-96];
-          const y=candidates.map(v=>Math.max(26,Math.min(486,v))).find(v=>speech.every(b=>Math.abs(b.x-x)>=138 || Math.abs(b.y-v)>=46));
+          const y=candidates.map(v=>Math.max(26,Math.min(486,v))).find(v=>speech.every(b=>Math.abs(b.x-x)>=b.width/2+half+6 || Math.abs(b.y-v)>=46));
           if(y===undefined) continue;
           const bubble=this.bubbles[speech.length]; bubble.setPosition(x,y).setVisible(true);
+          (bubble.list[1] as Phaser.GameObjects.Text).setText(phrase).setFontSize(u.cast?20:18);
           const g=bubble.list[0] as Phaser.GameObjects.Graphics;
           const tipX=Math.max(-57,Math.min(57,u.x/Q-x));
           const bottom=y<u.y/Q; const edge=bottom?20:-20; const tip=bottom?29:-29;
-          g.clear().fillStyle(0x111b2b,0.25).fillRoundedRect(-64,-17,132,40,11);
+          g.clear().fillStyle(0x111b2b,0.25).fillRoundedRect(-half+2,-17,half*2,40,11);
           g.fillStyle(0xfffdf0).lineStyle(2,0x182235);
           g.fillTriangle(tipX-7,edge,tipX+7,edge,tipX,tip);
           g.strokeTriangle(tipX-7,edge,tipX+7,edge,tipX,tip);
-          g.fillRoundedRect(-66,-20,132,40,10);g.strokeRoundedRect(-66,-20,132,40,10);
-          speech.push({id:u.id,x,y,width:132,height:40});
+          g.fillRoundedRect(-half,-20,half*2,40,10);g.strokeRoundedRect(-half,-20,half*2,40,10);
+          speech.push({id:u.id,x,y,width:half*2,height:40,phrase});
         }
         const rendered: object[] = [];
         for (const u of s.units) {
           if(u.hp>0) {
             this.effects.lineStyle(1.5,u.team==="A"?0x76efc7:0xff9b82,0.8);
             this.effects.strokeEllipse(u.x/Q,u.y/Q+8,17,7);
+          }
+          if(u.lock && u.hp>0 && !s.outcome && u.lock.phase!=="prone") {
+            const target=s.units[u.lock.target];
+            if(target?.hp>0) {
+              const p=u.lock.phase==="lock"?Math.max(0,(u.lock.due-s.tick)/LOCK.windup):0;
+              this.effects.lineStyle(2,0xff4b57,0.95);
+              this.effects.strokeCircle(target.x/Q,target.y/Q,10+22*p);
+              this.effects.lineBetween(target.x/Q-5,target.y/Q,target.x/Q+5,target.y/Q);
+            }
           }
           if(u.cast && u.hp>0) {
             const p=1-(u.cast.due-s.tick)/MAGE.windup;
@@ -205,7 +217,10 @@ export function Arena({ control }: { control: MutableRefObject<Control> }) {
             leg.fillStyle(0xf2c5a3); leg.fillRect(20, -4, 9, 8);
             leg.fillStyle(0xeef2f5); leg.fillRect(27, -5, 6, 10);
             leg.setVisible(false);
-            a = this.add.container(u.x / Q, u.y / Q, [sprite, bar, text, leg]);
+            const fist=this.add.graphics();
+            fist.fillStyle(0xa4d8ee);fist.fillRect(0,-3,12,6);
+            fist.fillStyle(0xffd2ad);fist.fillRect(11,-4,8,8);fist.setVisible(false);
+            a = this.add.container(u.x / Q, u.y / Q, [sprite, bar, text, leg, fist]);
             this.actors.set(u.id, a);
           }
           const sprite = a.list[0] as Phaser.GameObjects.Image,
@@ -238,6 +253,7 @@ export function Arena({ control }: { control: MutableRefObject<Control> }) {
           if(impact && this.emotionClock<impact.until && u.hp>0 && !s.outcome) sprite.setTintFill(0xfff5db);
           const leg = a.list[3] as Phaser.GameObjects.Graphics;
           leg.setVisible(false);
+          const fist=a.list[4] as Phaser.GameObjects.Graphics;fist.setVisible(false);
           const spinTick = s.tick + (c.paused || c.hidden ? 0 : this.debt / (1000 / 30));
           const winding = u.hp > 0 && !!u.kick;
           const recovering = u.hp > 0 && u.kickPoseUntil > 0 && s.tick <= u.kickPoseUntil;
@@ -252,6 +268,31 @@ export function Arena({ control }: { control: MutableRefObject<Control> }) {
               .setScale(winding ? 0.25 + 0.35 * p : 1 - 0.65 * p);
           } else if (u.hp > 0 && u.recoilLeft > 0 && !this.reduced.matches) {
             sprite.setAngle(u.kx >= 0 ? -20 : 20).setY(-10);
+          }
+          sprite.setScale(actorScale(u.character));
+          let lockPhase="none",kneeSlap=false;
+          if(u.hp>0 && u.lock && !s.outcome) {
+            lockPhase=u.lock.phase;
+            const target=s.units[u.lock.target];
+            const aim=target?Math.atan2(target.y-u.y,target.x-u.x)*180/Math.PI:0;
+            if(lockPhase==="lock") {
+              const elapsed=LOCK.windup-(u.lock.due-s.tick);
+              const slap=(elapsed>=7&&elapsed<11)||(elapsed>=21&&elapsed<25);kneeSlap=slap;
+              sprite.setScale(actorScale(u.character)*1.08,actorScale(u.character)*0.78).setY(-3);
+              this.effects.fillStyle(0xffd2ad);
+              for(const side of [-1,1]) {
+                const handY=a.y+(slap?5:-2);
+                this.effects.fillRect(a.x+side*9-2,handY,5,4);
+                if(slap){this.effects.lineStyle(1,0xffe296);this.effects.strokeCircle(a.x+side*9,handY,6);}
+              }
+            } else if(lockPhase==="prone") {
+              sprite.setAngle(90).setY(2);
+            } else if(lockPhase==="left"||lockPhase==="right") {
+              const remaining=u.lock.due-s.tick;
+              sprite.setAngle(this.reduced.matches?0:(lockPhase==="left"?-18:18));
+              fist.setVisible(true).setScale(remaining<=3?1:0.6).setPosition(lockPhase==="left"?-6:6,-8)
+                .setAngle(aim+(lockPhase==="left"?-20:20)).setAlpha(remaining<=3?1:0.7);
+            } else sprite.setAngle(this.reduced.matches?0:12);
           }
           const crying = cries(s.outcome, u.team, u.hp);
           const emotion = sobFrame(this.emotionClock, u.id, this.reduced.matches);
@@ -268,7 +309,7 @@ export function Arena({ control }: { control: MutableRefObject<Control> }) {
             }
           }
           rendered.push({ id:u.id, team:u.team, character:u.character, cast:!!u.cast, fleeing:u.fleeing, hitStop, hp:u.hp, crying, scale:sprite.scaleX,
-            y:sprite.y, angle:sprite.angle, kickPhase, legVisible:leg.visible, legAngle:leg.angle, x:a.x, worldY:a.y, recoilLeft:u.recoilLeft, drop:crying ? emotion.drop : null, visible:a.visible });
+            y:sprite.y, angle:sprite.angle, kickPhase, lockPhase, kneeSlap, fistVisible:fist.visible, scaleY:sprite.scaleY, legVisible:leg.visible, legAngle:leg.angle, x:a.x, worldY:a.y, recoilLeft:u.recoilLeft, drop:crying ? emotion.drop : null, visible:a.visible });
           const dmg = this.damageLabels.get(u.id);
           text.setText(
             crying ? "훌쩍…" : u.cast ? "" : dmg && dmg.until >= s.tick

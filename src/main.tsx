@@ -2,7 +2,7 @@ import React, { useEffect, useRef, useState } from "react";
 import { createRoot } from "react-dom/client";
 import { Arena, type Control } from "./Arena";
 import {
-  DEFAULT, NAMES, characterOf, MAGE_STATS, type Character,
+  DEFAULT, NAMES, STAT_MULTIPLIERS, characterOf, MAGE_STATS, type Character,
   effectiveStats,
   VERSION,
   createBattle,
@@ -309,6 +309,7 @@ function App() {
                     {
                       (
                         {
+                          lock_start: "록온 · 무릎 두 번", lock_dash: "록온 돌진", lock_left: "록온 왼손", lock_right: "록온 오른손", lock_prone: "엎드린 회복", lock_cancel: "록온 대상 소멸",
                           spell_cast: "야심!만만 · 시전", spell_release: "마법 발사", spell_hit: "마법 명중", spell_block: "몸통에 마법 소멸",
                           kick_windup: "35세 승현 · 돌려차기 예고",
                           kick_hit: "돌려차기 명중 · 넉백",
@@ -352,20 +353,20 @@ function App() {
                   <small>TEAM {t}</small>
                 </h3>
                 <p>
-                  {characterOf(draft,t) === "mage" ? "흰옷의 둥근 메이지. 가까우면 도주 → 멈춰서 야심!만만 → 다시 이동." : characterOf(draft,t) === "youth" ? "작고 민첩한 몸. 평타 피해 ×1.3." : "기본 6스탯 ×5, 평타 공속 ×1.5, 회전킥."}
+                  {characterOf(draft,t) === "seokho" ? "기본 6스탯 ×2.5 · 록온 → 좌우 타격 → 엎드린 회복." : characterOf(draft,t) === "mage" ? "흰옷의 둥근 메이지. 가까우면 도주 → 멈춰서 야심!만만 → 다시 이동." : characterOf(draft,t) === "youth" ? "작고 민첩한 몸. 평타 피해 ×1.3." : "기본 6스탯 ×5, 평타 공속 ×1.5, 회전킥."}
                 </p>
                 <label className="characterSelect">캐릭터
                   <select aria-label={`${t} 캐릭터`} value={characterOf(draft,t)} onChange={e => {
                     const character=e.target.value as Character;
-                    setDraft(d=>({...d,[t]:{...d[t],character,stats:[...(character==="mage"?MAGE_STATS:character==="adult"?DEFAULT.B.stats:DEFAULT.A.stats)] as Stats}}));
+                    setDraft(d=>({...d,[t]:{...d[t],character,stats:[...(character==="mage"?MAGE_STATS:(character==="adult"||character==="seokho")?DEFAULT.B.stats:DEFAULT.A.stats)] as Stats}}));
                   }}>
-                    {(["youth","adult","mage"] as const).map(c=><option key={c} value={c}>{NAMES[c]}</option>)}
+                    {(["youth","adult","mage","seokho"] as const).map(c=><option key={c} value={c}>{NAMES[c]}</option>)}
                   </select>
                 </label>
                 <CharacterPreview team={characterOf(draft,t)} />
                 <p className="hint">캐릭터 변경 시 해당 캐릭터 기본 스탯 복원 · 인원은 유지</p>
                 <p data-testid={`effective-${t}`}>
-                  {`${NAMES[characterOf(draft,t)]} ×${characterOf(draft,t)==="adult"?5:1}`} · 실제 적용 스탯<br />
+                  {`${NAMES[characterOf(draft,t)]} ×${STAT_MULTIPLIERS[characterOf(draft,t)]}`} · 실제 적용 스탯<br />
                   {labels.map((label, i) => `${label} ${effectiveStats(characterOf(draft,t), draft[t].stats)[i]}`).join(" / ")}
                 </p>
                 <label className="count">
@@ -579,6 +580,16 @@ function App() {
         </aside>
       </div>
       <footer>
+        <section className="panel" data-testid="seokho-rules">
+          <b>25세 석호 · 록온 · 모든 기본 스탯 ×2.5</b>
+          <p>기본 7 / 7 / 9 / 8 / 6 / 3 → 실제 17.5 / 17.5 / 22.5 / 20 / 15 / 7.5.
+          35세의 실제 스탯 절반이며 소수값을 보존합니다. 팀과 무관하게 적용, 35세의 회전킥·공속 보정은 없습니다.</p>
+          <p>120px 이내 적 1명 록온 → 1초 준비하며 무릎을 두 번 치고 “자신있게 맞아줄게” → 최대 1초, 120px/s 돌진.
+          몸통·벽을 통과하지 않습니다. 실제 거리 22px 안에서 왼손 준비 0.2초 후 타격, 0.3초 뒤 오른손 타격.
+          명중률은 기술 차이 5~95%, 몸통 가림·거리 이탈 시 실패합니다. 이 연속기의 첫 명중만 확정 치명 1.5배(왼손이 빗나가면 오른손), 이후 명중은 0.5%. 평타는 0.5% 그대로입니다.</p>
+          <p>시작 기준 재사용 7초 · 에너지 30. 두 타격 뒤 살아 있는 엎드림 1.5초와 “내가 잘못했어 ㅠㅠ”.
+          회복 중 이동·공격 불가, 적에게 맞을 수 있습니다(추가 피해배율 없음). 대상 KO 시 연속기를 취소하고 회복하며, 다음 연속기에서만 다시 조준합니다.</p>
+        </section>
         <section className="panel" data-testid="mage-rules">
           <b>14세 동우 · 메이지 · 야심!만만</b>
           <p>기본 스탯 7 / 8 / 8 / 6 / 6 / 5 (체력·스태미너·기술·파워·스피드·방어). 팀과 무관하게 보정 ×1.

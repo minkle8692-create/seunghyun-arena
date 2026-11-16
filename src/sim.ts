@@ -1,5 +1,6 @@
-// Authority for all combat. Integer centi-HP/energy and 1/256-pixel coordinates.
-export const VERSION = "arena-2.0.0",
+// Authority for all combat. Integer centi-HP and 1/256-pixel coordinates.
+// Exact half-stat inputs may regenerate half-cent energy (binary-exact .5), never truncated.
+export const VERSION = "arena-2.1.0",
   Q = 256,
   W = 384 * Q,
   H = 512 * Q,
@@ -19,10 +20,12 @@ export const KICK = {
 } as const;
 export type Kick = { due: number; dx: number; dy: number };
 export type Stats = [number, number, number, number, number, number];
-export type Character = "youth" | "adult" | "mage";
-export const NAMES = { youth: "14세 승현", adult: "35세 승현", mage: "14세 동우" };
+export type Character = "youth" | "adult" | "mage" | "seokho";
+export const NAMES = { youth: "14세 승현", adult: "35세 승현", mage: "14세 동우", seokho: "25세 석호" };
 export const MAGE = { range: 150 * Q, flee: 76 * Q, safe: 108 * Q, windup: 24, cooldown: 75, recovery: 12, cost: 1800, projectileSpeed: 7 * Q } as const;
 export const MAGE_STATS: Stats = [7, 8, 8, 6, 6, 5];
+export const LOCK = { range: 120*Q, windup: 30, dashTicks: 30, dashSpeed: 4*Q, gap: 9, recovery: 45, cooldown: 210, cost: 3000 } as const;
+export type LockSequence = { target:number; phase:"lock"|"dash"|"left"|"right"|"prone"; due:number; began:number; serial:number; landed:boolean };
 export type Cast = { due: number; target: number };
 export type Projectile = { id: number; actor: number; team: Team; x: number; y: number; vx: number; vy: number; left: number; power: number; skill: number };
 export const identity = (c: Character | Team): Character => c === "A" ? "youth" : c === "B" ? "adult" : c;
@@ -36,7 +39,7 @@ export const DEFAULT: Config = {
   B: { character: "adult", count: 1, stats: [7, 7, 9, 8, 6, 3] },
 };
 export type Team = "A" | "B";
-export const STAT_MULTIPLIERS = { youth: 1, adult: 5, mage: 1 } as const;
+export const STAT_MULTIPLIERS = { youth: 1, adult: 5, mage: 1, seokho: 2.5 } as const;
 // Config and persistence always contain BASE stats. Apply exactly once at spawn.
 export function effectiveStats(team: Team | Character, base: Stats): Stats {
   return base.map(n => n * STAT_MULTIPLIERS[identity(team)]) as Stats;
@@ -67,6 +70,8 @@ export type Unit = {
   id: number;
   team: Team;
   character: Character;
+  lock: LockSequence | null;
+  lockNext: number;
   cast: Cast | null;
   castNext: number;
   fleeing: boolean;
@@ -137,7 +142,7 @@ export function canonical(c: Config): Config {
   for (const t of ["A", "B"] as const) {
     if (
       !c?.[t] ||
-      (c[t].character !== undefined && !["youth", "adult", "mage"].includes(c[t].character!)) ||
+      (c[t].character !== undefined && !["youth", "adult", "mage", "seokho"].includes(c[t].character!)) ||
       !Number.isInteger(c[t].count) ||
       c[t].count < 1 ||
       c[t].count > 100 ||
@@ -216,7 +221,7 @@ export function createBattle(input: Config, seed: number): Battle {
       units.push({
         id,
         team,
-        character: characterOf(config,team), cast: null, castNext: 0, fleeing: false, fleeTicks: 0,
+        character: characterOf(config,team), lock: null, lockNext: 0, cast: null, castNext: 0, fleeing: false, fleeTicks: 0,
         stats,
         x: (192 + ((i % cols) - (cols - 1) / 2) * 20) * Q,
         y:
@@ -397,6 +402,13 @@ export function step(s: Battle) {
       if (!t || t.hp <= 0 || t.team === u.team || (best && dd < dist(u, t) * 0.64)) t = best;
       u.target = t?.id ?? -1;
     }
+    if (u.lock && u.lock.phase !== "prone") {
+      const locked=byId.get(u.lock.target);
+      if(!locked || locked.hp<=0 || locked.team===u.team) {
+        s.events.push({tick:s.tick,kind:"lock_cancel",actor:u.id,target:u.lock.target,reason:"target_KO"});
+        u.lock={...u.lock,phase:"prone",due:s.tick+LOCK.recovery};
+      }
+    }
     let mx = 0,
       my = 0;
     if (u.character === "mage" && t) {
@@ -405,7 +417,7 @@ export function step(s: Battle) {
       u.fleeTicks = u.fleeing && !u.cast ? u.fleeTicks + 1 : 0;
     }
     const mageMove = u.character === "mage";
-    if (s.tick > u.stunnedUntil && t && !u.attack && !u.kick && !u.cast &&
+    if (s.tick > u.stunnedUntil && t && !u.attack && !u.kick && !u.cast && !u.lock &&
       (mageMove ? (u.fleeing || dist(u,t) > (MAGE.range * 0.85) ** 2) : dist(u, t) > (19 * Q) ** 2)) {
       let dx = t.x - u.x,
         dy = t.y - u.y;
@@ -438,6 +450,22 @@ export function step(s: Battle) {
       [mx, my] = norm(dx, dy, speed);
       if (s.tick > u.flashUntil) u.flash = "walk";
     } else if (s.tick > u.flashUntil) u.flash = "idle";
+    if (u.lock?.phase==="dash" && s.tick>u.stunnedUntil) {
+      const target=byId.get(u.lock.target);
+      if(target && target.hp>0 && dist(u,target)>(19*Q)**2) {
+        const [dx,dy]=norm(target.x-u.x,target.y-u.y,Math.min(LOCK.dashSpeed,Math.max(0,isqrt(dist(u,target))-19*Q)));
+        // Swept short dash blocked by the first body; never teleport through a crowd.
+        let safe=true;
+        for(const body of grid.near(u.x,u.y,LOCK.dashSpeed+2*R)) {
+          if(body.id===u.id)continue;
+          for(let n=1;n<=4;n++) {
+            const x=u.x+dx*n/4,y=u.y+dy*n/4;
+            if((x-body.x)**2+(y-body.y)**2<(2*R)**2 && (x-body.x)**2+(y-body.y)**2<dist(u,body)) safe=false;
+          }
+        }
+        if(safe){mx=dx;my=dy;}
+      }
+    }
     if (u.recoilLeft > 0) {
       const rx = round(u.kx / u.recoilLeft), ry = round(u.ky / u.recoilLeft);
       moves.set(u.id, [rx, ry]);
@@ -446,7 +474,7 @@ export function step(s: Battle) {
       moves.set(u.id, [mx + u.kx, my + u.ky]);
       u.kx = 0; u.ky = 0;
     }
-    if (!u.attack && !u.kick && !u.cast && s.tick - u.last >= 30)
+    if (!u.attack && !u.kick && !u.cast && !u.lock && s.tick - u.last >= 30)
       u.energy = Math.min(u.maxEnergy, u.energy + 12 + 3 * u.stats[1]);
   }
   for (const u of live) {
@@ -495,6 +523,48 @@ export function step(s: Battle) {
   for (const u of live) {
     if (s.tick <= u.stunnedUntil) continue;
     const t = byId.get(u.target);
+    if(u.character==="seokho") {
+      if(!u.lock && !u.attack && t && t.hp>0 && s.tick>=u.next && s.tick>=u.lockNext && u.energy>=LOCK.cost && dist(u,t)<=LOCK.range**2) {
+        u.lock={target:t.id,phase:"lock",due:s.tick+LOCK.windup,began:s.tick,serial:++u.serial,landed:false};
+        u.lockNext=s.tick+LOCK.cooldown;u.energy-=LOCK.cost;u.last=s.tick;
+        s.events.push({tick:s.tick,kind:"lock_start",actor:u.id,target:t.id});
+      }
+      if(u.lock) {
+        const seq=u.lock;u.last=s.tick;
+        const target=byId.get(seq.target);
+        if(seq.phase==="lock" && s.tick>=seq.due) {
+          seq.phase="dash";seq.due=s.tick+LOCK.dashTicks;
+          s.events.push({tick:s.tick,kind:"lock_dash",actor:u.id,target:seq.target});
+        } else if(seq.phase==="dash" && (s.tick>=seq.due || (target && dist(u,target)<=RANGE**2))) {
+          seq.phase="left";seq.due=s.tick+6;
+        } else if((seq.phase==="left"||seq.phase==="right") && s.tick>=seq.due) {
+          const side=seq.phase;
+          const ev:Event={tick:s.tick,kind:"lock_"+side,actor:u.id,target:seq.target,
+            attack:{target:seq.target,due:s.tick,serial:seq.serial*2+(side==="right"?1:0),hit:roll(u,1000),damage:95+roll(u,11),crit:roll(u,1000)}};
+          const a=ev.attack!;
+          if(!target || target.hp<=0)ev.reason="target_KO";
+          else if(dist(u,target)>RANGE**2)ev.reason="range";
+          else if(occluded(u,target,post))ev.reason="occluded";
+          else if(a.hit>=hitThreshold(u.stats[2],target.stats[2]))ev.reason="miss";
+          else {
+            const crit=!seq.landed || a.crit<5;
+            ev.reason=crit?"critical":"normal";seq.landed=true;
+            ev.damage=damage(u.stats[3],target.stats[5],a.damage,crit);
+            const h=hits.get(target.id)||{sum:0,x:0,y:0,ids:[]};
+            h.sum+=ev.damage;h.ids.push(u.id);hits.set(target.id,h);
+            s.counts.hit++;if(crit)s.counts.crit++;
+            target.flash=crit?"crit":"hit";target.flashUntil=s.tick+8;
+          }
+          s.events.push(ev);
+          if(side==="left"){seq.phase="right";seq.due=s.tick+LOCK.gap;}
+          else {seq.phase="prone";seq.due=s.tick+LOCK.recovery;
+            s.events.push({tick:s.tick,kind:"lock_prone",actor:u.id,target:seq.target});}
+        } else if(seq.phase==="prone" && s.tick>=seq.due) {
+          u.lock=null;u.next=s.tick+6;
+        }
+        continue;
+      }
+    }
     if (u.character === "mage") {
       if (u.cast) {
         u.last=s.tick;
@@ -668,6 +738,7 @@ export function step(s: Battle) {
         }
         u.kick = null;
         u.cast = null;
+        if(u.lock) u.lock={...u.lock,phase:"prone",due:s.tick+KICK.recoilTicks+KICK.recoveryTicks+LOCK.recovery};
       }
       s.events.push({
         tick: s.tick,
@@ -684,7 +755,7 @@ export function step(s: Battle) {
       u.flash = "ko";
       u.flashUntil = s.tick + 45;
       s.events.push({ tick: s.tick, kind: "ko", actor: -1, target: u.id });
-      u.kick = null; u.cast = null;
+      u.kick = null; u.cast = null; u.lock=null;
       if (u.attack) {
         s.events.push({
           tick: s.tick,
@@ -722,9 +793,9 @@ export function summarize(s: Battle) {
   return {
     simVersion: VERSION,
     configSchemaVersion: 2,
-    resultSchemaVersion: 4,
+    resultSchemaVersion: 5,
     combatModifiers: { ...COMBAT_MODIFIERS },
-    statMultipliers: { A: characterOf(s.config,"A")==="adult"?5:1, B: characterOf(s.config,"B")==="adult"?5:1 },
+    statMultipliers: { A: STAT_MULTIPLIERS[characterOf(s.config,"A")], B: STAT_MULTIPLIERS[characterOf(s.config,"B")] },
     effectiveStats: { A: effectiveStats(characterOf(s.config,"A"), s.config.A.stats), B: effectiveStats(characterOf(s.config,"B"), s.config.B.stats) },
     rngVersion: "lcg32-reject-v1",
     spawnVersion: 1,
