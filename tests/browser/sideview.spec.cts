@@ -1,6 +1,6 @@
 import {test,expect} from '@playwright/test';
 import {mkdirSync,writeFileSync} from 'node:fs';
-const dir=`evidence/sideview/${process.env.LIVE?'live':'local'}`;
+const dir=`evidence/frame-revision/${process.env.LIVE?'live':'local'}`;
 test.beforeAll(()=>mkdirSync(dir,{recursive:true}));
 for(const mobile of [false,true])test(`sideview full flow ${mobile?'mobile reduced':'desktop'}`,async({page})=>{
  const errors:string[]=[];page.on('pageerror',e=>errors.push(e.message));
@@ -13,9 +13,9 @@ for(const mobile of [false,true])test(`sideview full flow ${mobile?'mobile reduc
  await expect(page.getByLabel('A 캐릭터',{exact:true})).not.toBeVisible();
  const hudBox=await replay.locator('.replayHUD').boundingBox(),canvasBox=await replay.locator('canvas').boundingBox();expect(canvasBox!.y).toBeGreaterThanOrEqual(hudBox!.y+hudBox!.height-1);
  const frames:any[]=[];
- for(const [name,time] of [['연속 킥',0],['회전 · 패링',2.66],['점프',5.22],['반격',6.65],['피니시',8.68]] as const){await page.getByRole('button',{name,exact:true}).click();await expect(replay).toHaveAttribute('data-time',time.toFixed(3));const data=await replay.locator('canvas').evaluate((e:HTMLCanvasElement)=>e.toDataURL());frames.push({name,time,dataLength:data.length});await replay.screenshot({path:`${dir}/${tag}-${time}.png`});}
- await page.getByLabel('장면 탐색',{exact:true}).focus();await page.keyboard.press('Home');await expect(replay).toHaveAttribute('data-time','0.000');await page.keyboard.press('ArrowRight');await expect(replay).toHaveAttribute('data-time','0.010');
- await page.getByLabel('장면 탐색',{exact:true}).evaluate((e:HTMLInputElement)=>{Object.getOwnPropertyDescriptor(HTMLInputElement.prototype,'value')!.set!.call(e,'1.6');e.dispatchEvent(new Event('input',{bubbles:true}));});await expect(replay).toHaveAttribute('data-hitstop','true');await replay.screenshot({path:`${dir}/${tag}-kick.png`});
+ for(const [name,time] of [['연속 킥',0],['회전 · 패링',79/30],['점프',156/30],['반격',218/30],['피니시',260/30]] as const){await page.getByRole('button',{name,exact:true}).click();await expect(replay).toHaveAttribute('data-time',time.toFixed(3));const data=await replay.locator('canvas').evaluate((e:HTMLCanvasElement)=>e.toDataURL());frames.push({name,time,dataLength:data.length});await replay.screenshot({path:`${dir}/${tag}-${time}.png`});}
+ await page.getByLabel('장면 탐색',{exact:true}).focus();await page.keyboard.press('Home');await expect(replay).toHaveAttribute('data-time','0.000');await page.keyboard.press('ArrowRight');await expect(replay).toHaveAttribute('data-time','0.033');
+ await page.getByLabel('장면 탐색',{exact:true}).evaluate((e:HTMLInputElement)=>{Object.getOwnPropertyDescriptor(HTMLInputElement.prototype,'value')!.set!.call(e,'45');e.dispatchEvent(new Event('input',{bubbles:true}));});await expect(replay).toHaveAttribute('data-hitstop','true');await replay.screenshot({path:`${dir}/${tag}-kick.png`});
  await page.getByRole('button',{name:'처음으로',exact:true}).click();await expect(replay).toHaveAttribute('data-time','0.000');
  await page.getByRole('button',{name:'리플레이 재생',exact:true}).click();await expect.poll(async()=>Number(await replay.getAttribute('data-time'))).toBeGreaterThan(.2);await page.getByRole('button',{name:'리플레이 일시정지',exact:true}).click();const frozen=await replay.getAttribute('data-time');const pixels=await replay.locator('canvas').evaluate((e:HTMLCanvasElement)=>e.toDataURL());await page.waitForTimeout(200);expect(await replay.getAttribute('data-time')).toBe(frozen);expect(await replay.locator('canvas').evaluate((e:HTMLCanvasElement)=>e.toDataURL())).toBe(pixels);
  await page.getByRole('button',{name:'처음으로',exact:true}).click();await page.getByRole('button',{name:'리플레이 재생',exact:true}).click();await expect(replay).toHaveAttribute('data-time','8.800',{timeout:12000});await expect(replay).toHaveAttribute('data-playing','false');await expect(replay).toContainText('REPLAY END');await replay.screenshot({path:`${dir}/${tag}-end.png`});

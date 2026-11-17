@@ -1,6 +1,6 @@
 import {test,expect} from '@playwright/test';
-import {mkdirSync,writeFileSync} from 'node:fs';
-const dir=`evidence/boxing/${process.env.LIVE?'live':'local'}`;
+import {mkdirSync,writeFileSync,readFileSync} from 'node:fs';
+const dir=process.env.EVIDENCE_DIR || `evidence/boxing/${process.env.LIVE?'live':'local'}`;
 for(const side of ['A','B'])test('real boxing guard/right-left/dogeza and cleanup '+side,async({page})=>{
  mkdirSync(dir,{recursive:true});if(side==='B'){await page.setViewportSize({width:390,height:844});await page.emulateMedia({reducedMotion:'reduce'});}
  await page.goto('/?diagnostics=1');
@@ -23,7 +23,12 @@ for(const side of ['A','B'])test('real boxing guard/right-left/dogeza and cleanu
  expect(actor.some(a=>a.bodyPose==='boxing-guard')).toBe(true);
  for(const phase of ['right','left']){const rows=actor.filter(a=>a.lockPhase===phase&&a.poseExtension>.7);expect(rows.length).toBeGreaterThan(0);for(const a of rows){expect(a.poseRight.y).toBeGreaterThan(0);expect(a.poseLeft.y).toBeLessThan(0);expect((phase==='right'?a.poseRight:a.poseLeft).x).toBeGreaterThan(24);expect((phase==='right'?a.poseLeft:a.poseRight).x).toBe(10);}}
  expect(actor.some(a=>a.hp>0&&a.bodyPose==='dogeza')).toBe(true);
- const events=[...new Map(frames.flatMap(f=>f.s.events).filter((e:any)=>['lock_right','lock_left'].includes(e.kind)).map((e:any)=>[e.actor+':'+e.attack.serial,e])).values()] as any[];
+ // Use the game's retained log, not a 16ms poll of a one-tick event buffer.
+ await page.locator('.logs summary').click();
+ const downloadPromise=page.waitForEvent('download');await page.getByRole('button',{name:'현재 요약 + 최근 로그 저장',exact:true}).click();
+ const downloaded=await downloadPromise;const persistent=JSON.parse(readFileSync((await downloaded.path())!,'utf8'));
+ const events:any[]=persistent.events.filter((e:any)=>['lock_right','lock_left'].includes(e.kind)).sort((a:any,b:any)=>a.tick-b.tick);
+
  expect(events.slice(0,2).map(e=>e.kind)).toEqual(['lock_right','lock_left']);
  for(const e of events)if(e.damage)expect(e.reason).toBe(e.kind==='lock_right'||e.attack.crit<5?'critical':'normal');
  await page.getByRole('button',{name:'↻ 같은 시드 재시작',exact:true}).click();
