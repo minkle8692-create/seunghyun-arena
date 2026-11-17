@@ -13,6 +13,7 @@ import {
 } from "./sim";
 import { readSaved, save } from "./storage";
 import "./style.css";
+import { SideviewReplay } from "./SideviewReplay";
 import { ScenarioShowcase } from "./ScenarioShowcase";
 import { SCENARIO_SEED, SCENARIO_CHAPTERS, scenarioConfig, scenarioCaption } from "./scenario";
 import { CharacterPreview } from "./characters";
@@ -41,6 +42,7 @@ function App() {
   const [draft, setDraft] = useState<Config>(
     initial.current.config || structuredClone(DEFAULT),
   );
+  const [sideReplay, setSideReplay] = useState(false);
   const [scenario, setScenario] = useState(false);
   const [chapter, setChapter] = useState(0);
   const introElapsed = useRef(0);
@@ -80,7 +82,7 @@ function App() {
     }
   };
   control.current.speed = speed;
-  control.current.paused = paused || (scenario && chapter < 3);
+  control.current.paused = sideReplay || paused || (scenario && chapter < 3);
   control.current.hidden = hidden;
   useEffect(() => {
     const id = setTimeout(() => {
@@ -236,6 +238,8 @@ function App() {
         </a>
         <span className="version">LOCAL SIM · v2.1</span>
       </header>
+      {sideReplay && <SideviewReplay onReturn={() => setSideReplay(false)} />}
+      <div hidden={sideReplay}>
       <section className="intro">
         <div className="eyebrow">네 캐릭터, 각자의 전투 방식</div>
         <h1>
@@ -243,6 +247,7 @@ function App() {
         </h1>
         <p>수적 우위와 한 끗의 기술. 마지막까지 살아남는 팀은?</p>
       </section>
+      {!scenario && <section className="scenarioLaunch panel sideviewLaunch"><div><div className="eyebrow">NEW · SIDEVIEW REPLAY</div><h2>석호의 연속 킥, 승현의 반격</h2><p>큰 전신 픽셀 캐릭터로 보는 8.8초 측면 공방 · 별도 연출 애니메이션</p></div><button className="primary" disabled={!!busy} onClick={() => setSideReplay(true)}>▶ 측면 격투 리플레이</button></section>}
       {!scenario && <section className="scenarioLaunch panel">
         <div><div className="eyebrow">SPECIAL MATCH · 1 VS 1</div><h2>회전킥 VS 록온</h2>
           <p>35세 승현과 25세 석호의 짧은 소개, 그리고 실제 결투. 기존 설정은 그대로 보관됩니다.</p></div>
@@ -735,6 +740,7 @@ function App() {
           {VERSION} · 오리지널 픽셀 아트 · 서버 없이 브라우저에서 실행
         </small>
       </footer>
+      </div>
     </main>
   );
 }
