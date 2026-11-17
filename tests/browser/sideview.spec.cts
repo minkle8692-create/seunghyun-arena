@@ -11,6 +11,7 @@ for(const mobile of [false,true])test(`sideview full flow ${mobile?'mobile reduc
  const before=await page.evaluate(()=>({s:(window as any).arenaDiagnostics.snapshot(),draft:localStorage.getItem('arena.draft'),last:localStorage.getItem('arena.last')}));
  await page.getByRole('button',{name:'▶ 측면 격투 리플레이',exact:true}).click();const replay=page.getByTestId('side-replay');await expect(replay).toBeVisible();await expect(replay).toHaveAttribute('data-playing','false');await expect(replay).toContainText('HP는 연출용');
  await expect(page.getByLabel('A 캐릭터',{exact:true})).not.toBeVisible();
+ const hudBox=await replay.locator('.replayHUD').boundingBox(),canvasBox=await replay.locator('canvas').boundingBox();expect(canvasBox!.y).toBeGreaterThanOrEqual(hudBox!.y+hudBox!.height-1);
  const frames:any[]=[];
  for(const [name,time] of [['연속 킥',0],['회전 · 패링',2.66],['점프',5.22],['반격',6.65],['피니시',8.68]] as const){await page.getByRole('button',{name,exact:true}).click();await expect(replay).toHaveAttribute('data-time',time.toFixed(3));const data=await replay.locator('canvas').evaluate((e:HTMLCanvasElement)=>e.toDataURL());frames.push({name,time,dataLength:data.length});await replay.screenshot({path:`${dir}/${tag}-${time}.png`});}
  await page.getByLabel('장면 탐색',{exact:true}).focus();await page.keyboard.press('Home');await expect(replay).toHaveAttribute('data-time','0.000');await page.keyboard.press('ArrowRight');await expect(replay).toHaveAttribute('data-time','0.010');
